@@ -56,17 +56,18 @@ export const EXTRA_BATH_SURCHARGE = {
   end_of_tenancy: 30,
 };
 
-export const DEPOSIT_PERCENT = 0.20; // 20% deposit to lock in booking
+// Card is authorised or saved now and only charged once the clean is completed —
+// so the customer always sees the full amount as the figure to be charged.
 
 export function computeQuote(state) {
   const { service, propertyType, extraBathrooms = 0 } = state;
   if (!service || !propertyType) {
-    return { base: 0, bathSurcharge: 0, subtotal: 0, total: 0, deposit: 0, hours: 0 };
+    return { base: 0, bathSurcharge: 0, subtotal: 0, total: 0, hours: 0 };
   }
 
   const svc = SERVICES.find((s) => s.key === service);
   if (!svc) {
-    return { base: 0, bathSurcharge: 0, subtotal: 0, total: 0, deposit: 0, hours: 0 };
+    return { base: 0, bathSurcharge: 0, subtotal: 0, total: 0, hours: 0 };
   }
 
   const pt = PROPERTY_TYPES.find((p) => p.key === propertyType);
@@ -78,13 +79,12 @@ export function computeQuote(state) {
 
   const subtotal = base + bathSurcharge;
   const total = +subtotal.toFixed(2);
-  const deposit = +(total * DEPOSIT_PERCENT).toFixed(2);
 
   // Rough cleaner-hours estimate used for the sidebar
   const bedForHours = Math.max(bedKey, 1);
   const hours = +(bedForHours * (svc.hoursPerBedroom || 1.25) + extraBathrooms * 0.5).toFixed(1);
 
-  return { base, bathSurcharge, subtotal: +subtotal.toFixed(2), total, deposit, hours };
+  return { base, bathSurcharge, subtotal: +subtotal.toFixed(2), total, hours };
 }
 
 export function money(n) {

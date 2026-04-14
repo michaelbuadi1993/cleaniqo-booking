@@ -69,8 +69,9 @@ export default function App() {
             <div className="success__icon">✓</div>
             <h2 className="success__title">Booking confirmed!</h2>
             <p className="success__sub">
-              Your deposit is received and your Cleaniqo team is being assigned. Check your inbox
-              for the confirmation email with your booking reference and arrival window.
+              Your card is saved and your Cleaniqo team is being assigned — you'll only be charged
+              once the clean is completed. Check your inbox for the confirmation email with your
+              booking reference and arrival window.
             </p>
             <a href="/" className="btn btn--primary">Book another clean</a>
           </div>
@@ -156,7 +157,6 @@ export default function App() {
           base: quote.base,
           extras: 0,
           total: quote.total,
-          deposit: quote.deposit,
           discountPct: 0,
         },
       };
@@ -430,10 +430,11 @@ export default function App() {
           <section className="section">
             <h3 className="section__title">Payment</h3>
             <div className="note-box">
-              <strong>Debit or credit card only.</strong>{' '}
-              We take a 20% deposit now (refundable up to 24 hours before your clean), and
-              charge the balance to the same card once the clean is completed. Your card
-              details are handled securely by Stripe — Cleaniqo never sees your card number.
+              <strong>Debit or credit card only — no charge today.</strong>{' '}
+              Your card is saved securely by Stripe when you confirm. Nothing leaves your account
+              until your clean is completed — we only charge the full amount afterwards.
+              Cancel free of charge up to 24 hours before your slot. Cleaniqo never sees your
+              card number.
             </div>
 
             <div className="terms">
@@ -461,7 +462,7 @@ export default function App() {
               onClick={handleSubmit}
               disabled={submitting}
             >
-              {submitting ? 'Redirecting to Stripe…' : `Pay deposit · ${money(quote.deposit || 0)}`}
+              {submitting ? 'Redirecting to Stripe…' : `Confirm booking · ${money(quote.total || 0)}`}
             </button>
           </div>
         </div>
@@ -476,7 +477,7 @@ function Brand() {
   return (
     <div className="brand">
       <div className="brand__logo">Cleaniqo</div>
-      <div className="brand__badge">Secure booking · 20% deposit · Free cancellation up to 24h</div>
+      <div className="brand__badge">Secure booking · Pay after clean · Free cancellation up to 24h</div>
     </div>
   );
 }
@@ -527,20 +528,18 @@ function Sidebar({ state, service, propertyLabel, quote }) {
       </div>
 
       <div className="summary__total">
-        <span>Total cost</span>
+        <span>Total — charged after clean</span>
         <span>{money(quote.total || 0)}</span>
       </div>
-      {quote.deposit > 0 && (
-        <div className="summary__row" style={{ marginTop: 10 }}>
-          <span>Deposit due today</span>
-          <span>{money(quote.deposit)}</span>
-        </div>
-      )}
+      <div className="summary__row" style={{ marginTop: 10 }}>
+        <span>Due today</span>
+        <span>£0.00</span>
+      </div>
 
       <p className="summary__note">
-        Final price may shift if the property condition differs from what was booked —
-        our team will confirm before any change. Your card is charged AFTER the appointment
-        is completed.
+        Your card is saved securely by Stripe when you confirm your booking. We only charge
+        the full amount once your clean is completed. Final price may shift if the property
+        condition differs from what was booked — our team will confirm before any change.
       </p>
     </aside>
   );
