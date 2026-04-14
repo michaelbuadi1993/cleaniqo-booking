@@ -2,7 +2,6 @@ import { useMemo, useState } from 'react';
 import {
   SERVICES,
   PROPERTY_TYPES,
-  EXTRAS,
   computeQuote,
   money,
   validateUkPhone,
@@ -10,8 +9,6 @@ import {
 } from './pricing.js';
 import { api } from './api.js';
 import Success from './components/Success.jsx';
-
-const CONTACT_HREF = 'https://cleaniqo.co.uk/contact';
 
 const INITIAL = {
   // Location
@@ -22,8 +19,8 @@ const INITIAL = {
   // Property
   propertyType: '',
   extraBathrooms: 0,
-  // Extras
-  extras: [],
+  // Extras / add-on notes — free-form, not charged
+  extrasNotes: '',
   // Schedule
   bookingDate: '',
   startTime: '',
@@ -94,7 +91,6 @@ export default function App() {
   }
 
   const selectedService = SERVICES.find((s) => s.key === state.service);
-  const isPhoneOnly = !!selectedService?.phoneOnly;
   const propertyLabel =
     PROPERTY_TYPES.find((p) => p.key === state.propertyType)?.label || 'Not selected';
 
@@ -106,7 +102,6 @@ export default function App() {
     if (!pc.ok) errs.postcode = pc.error;
     if (!state.address.trim()) errs.address = 'Address is required';
     if (!state.service) errs.service = 'Choose a service';
-    if (isPhoneOnly) errs.service = 'This service is arranged over the phone';
     if (!state.propertyType) errs.propertyType = 'Select a property type';
     if (!state.bookingDate) errs.bookingDate = 'Pick a date';
     if (!state.startTime) errs.startTime = 'Pick a start time';
@@ -145,17 +140,21 @@ export default function App() {
         frequency: 'one_off',
         bedrooms: pt ? pt.bedrooms : 0,
         bathrooms: 1 + Number(state.extraBathrooms || 0),
-        extras: state.extras,
+        extras: [],
         bookingDate: state.bookingDate,
         startTime: state.startTime,
         address: state.address.trim(),
         postcode: validateUkPostcode(state.postcode).value,
-        specialInstructions: [state.accessNotes, state.specialInstructions]
+        specialInstructions: [
+          state.accessNotes,
+          state.extrasNotes ? `Additional requests: ${state.extrasNotes}` : '',
+          state.specialInstructions,
+        ]
           .filter(Boolean)
           .join('\n\n') || null,
         quote: {
           base: quote.base,
-          extras: quote.extras,
+          extras: 0,
           total: quote.total,
           deposit: quote.deposit,
           discountPct: 0,
@@ -251,29 +250,15 @@ export default function App() {
                 <option value="">Select a service…</option>
                 {SERVICES.map((s) => (
                   <option key={s.key} value={s.key}>
-                    {s.label}{s.phoneOnly ? '' : ` — from ${money(s.fromPrice)}`}
+                    {s.label} — from {money(s.fromPrice)}
                   </option>
                 ))}
               </select>
               {fieldErrors.service && <div className="field__error">{fieldErrors.service}</div>}
-              {selectedService && !isPhoneOnly && (
+              {selectedService && (
                 <div className="field__help">{selectedService.desc}</div>
               )}
             </div>
-
-            {isPhoneOnly && (
-              <div className="phone-box">
-                <strong>Airbnb turnovers are arranged over the phone.</strong>
-                <p>
-                  We confirm schedule, linen supply and key access directly so turnovers land
-                  without surprises. Give us a ring or drop us a message and we'll set it up
-                  the same day.
-                </p>
-                <a className="btn btn--primary" href={CONTACT_HREF} target="_top" rel="noreferrer">
-                  Call or message us →
-                </a>
-              </div>
-            )}
 
             <div className="note-box" style={{ marginTop: 18 }}>
               <strong>Need a weekly, fortnightly or monthly clean?</strong>{' '}
@@ -318,27 +303,17 @@ export default function App() {
 
           {/* ── 4. Extras ─────────────────────────────────────────────────── */}
           <section className="section">
-            <h3 className="section__title">Optional extras</h3>
-            <div className="extras">
-              {EXTRAS.map((e) => {
-                const checked = state.extras.includes(e.key);
-                return (
-                  <label key={e.key} className={`extra ${checked ? 'extra--checked' : ''}`}>
-                    <input
-                      type="checkbox"
-                      checked={checked}
-                      onChange={() => {
-                        const next = checked
-                          ? state.extras.filter((x) => x !== e.key)
-                          : [...state.extras, e.key];
-                        update({ extras: next });
-                      }}
-                    />
-                    <span>{e.label}</span>
-                    <span className="extra__price">+{money(e.price)}</span>
-                  </label>
-                );
-              })}
+            <h3 className="section__title">Any additional requests?</h3>
+            <div className="field">
+              <textarea
+                className="field__textarea"
+                placeholder="E.g. inside oven, inside fridge, inside windows, balcony, ironing… message us anything extra you'd like and we'll sort it on the day."
+                value={state.extrasNotes}
+                onChange={(e) => update({ extrasNotes: e.target.value })}
+              />
+              <div className="field__help">
+                Optional — not charged here. If you'd like any add-ons, just tell us what you need and we'll organise it directly with your cleaner.
+              </div>
             </div>
           </section>
 
@@ -484,7 +459,7 @@ export default function App() {
             <button
               className="btn btn--primary btn--lg"
               onClick={handleSubmit}
-              disabled={submitting || isPhoneOnly}
+              disabled={submitting}
             >
               {submitting ? 'Redirecting to Stripe…' : `Pay deposit · ${money(quote.deposit || 0)}`}
             </button>
@@ -507,9 +482,6 @@ function Brand() {
 }
 
 function Sidebar({ state, service, propertyLabel, quote }) {
-  const extrasList = (state.extras || [])
-    .map((k) => EXTRAS.find((e) => e.key === k)?.label)
-    .filter(Boolean);
   return (
     <aside className="summary">
       <h3 className="summary__title">Booking summary</h3>
@@ -532,10 +504,10 @@ function Sidebar({ state, service, propertyLabel, quote }) {
               : `${state.extraBathrooms} extra`}
           </span>
         </div>
-        {extrasList.length > 0 && (
+        {state.extrasNotes && state.extrasNotes.trim() && (
           <div className="summary__row">
-            <span>Extras:</span>
-            <span>{extrasList.join(', ')}</span>
+            <span>Additional requests:</span>
+            <span>Included in notes</span>
           </div>
         )}
         {state.bookingDate && state.startTime && (

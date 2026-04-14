@@ -27,15 +27,6 @@ export const SERVICES = [
     desc: 'Deposit-back standard, agent approved',
     hoursPerBedroom: 2.75,
   },
-  {
-    key: 'airbnb',
-    label: 'Airbnb Turnover — call us',
-    short: 'Airbnb Turnover',
-    fromPrice: 60,
-    desc: 'Arranged over the phone so we can confirm linen, access and schedule',
-    hoursPerBedroom: 1.25,
-    phoneOnly: true,
-  },
 ];
 
 // Property types offered by the form. `bedrooms` is the key into BEDROOM_PRICES.
@@ -65,29 +56,17 @@ export const EXTRA_BATH_SURCHARGE = {
   end_of_tenancy: 30,
 };
 
-// Optional extras (per-job add-ons)
-export const EXTRAS = [
-  { key: 'inside_oven',    label: 'Inside oven',         price: 25 },
-  { key: 'inside_fridge',  label: 'Inside fridge',       price: 20 },
-  { key: 'inside_windows', label: 'Inside windows',      price: 25 },
-  { key: 'inside_cabinets',label: 'Inside cabinets',     price: 30 },
-  { key: 'laundry',        label: 'Laundry & fold',      price: 20 },
-  { key: 'ironing',        label: 'Ironing (1 hour)',    price: 18 },
-  { key: 'balcony',        label: 'Balcony / patio',     price: 20 },
-  { key: 'pet_hair',       label: 'Pet hair treatment',  price: 15 },
-];
-
 export const DEPOSIT_PERCENT = 0.20; // 20% deposit to lock in booking
 
 export function computeQuote(state) {
-  const { service, propertyType, extraBathrooms = 0, extras = [] } = state;
+  const { service, propertyType, extraBathrooms = 0 } = state;
   if (!service || !propertyType) {
-    return { base: 0, bathSurcharge: 0, extras: 0, subtotal: 0, total: 0, deposit: 0, hours: 0 };
+    return { base: 0, bathSurcharge: 0, subtotal: 0, total: 0, deposit: 0, hours: 0 };
   }
 
   const svc = SERVICES.find((s) => s.key === service);
-  if (!svc || svc.phoneOnly) {
-    return { base: 0, bathSurcharge: 0, extras: 0, subtotal: 0, total: 0, deposit: 0, hours: 0, phoneOnly: true };
+  if (!svc) {
+    return { base: 0, bathSurcharge: 0, subtotal: 0, total: 0, deposit: 0, hours: 0 };
   }
 
   const pt = PROPERTY_TYPES.find((p) => p.key === propertyType);
@@ -97,12 +76,7 @@ export function computeQuote(state) {
 
   const bathSurcharge = Math.max(extraBathrooms, 0) * (EXTRA_BATH_SURCHARGE[service] || 15);
 
-  const extrasTotal = extras.reduce((acc, k) => {
-    const e = EXTRAS.find((x) => x.key === k);
-    return acc + (e ? e.price : 0);
-  }, 0);
-
-  const subtotal = base + bathSurcharge + extrasTotal;
+  const subtotal = base + bathSurcharge;
   const total = +subtotal.toFixed(2);
   const deposit = +(total * DEPOSIT_PERCENT).toFixed(2);
 
@@ -110,7 +84,7 @@ export function computeQuote(state) {
   const bedForHours = Math.max(bedKey, 1);
   const hours = +(bedForHours * (svc.hoursPerBedroom || 1.25) + extraBathrooms * 0.5).toFixed(1);
 
-  return { base, bathSurcharge, extras: extrasTotal, subtotal: +subtotal.toFixed(2), total, deposit, hours };
+  return { base, bathSurcharge, subtotal: +subtotal.toFixed(2), total, deposit, hours };
 }
 
 export function money(n) {
