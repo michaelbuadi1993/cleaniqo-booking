@@ -1,15 +1,16 @@
 import { useMemo, useState } from 'react';
-import { computeQuote } from './pricing.js';
+import { computeQuote, SERVICES } from './pricing.js';
 import { api } from './api.js';
 import Progress from './components/Progress.jsx';
 import PricePanel from './components/PricePanel.jsx';
 import StepService from './components/StepService.jsx';
-import StepFrequency from './components/StepFrequency.jsx';
 import StepSize from './components/StepSize.jsx';
 import StepExtras from './components/StepExtras.jsx';
 import StepDateTime from './components/StepDateTime.jsx';
 import StepContact from './components/StepContact.jsx';
 import Success from './components/Success.jsx';
+
+const CONTACT_HREF = 'https://cleaniqo.co.uk/contact';
 
 const INITIAL = {
   service: '',
@@ -28,7 +29,7 @@ const INITIAL = {
   specialInstructions: '',
 };
 
-const STEPS = ['Service', 'Frequency', 'Size', 'Extras', 'Date', 'Details'];
+const STEPS = ['Service', 'Size', 'Extras', 'Date', 'Details'];
 
 export default function App() {
   const [state, setState] = useState(INITIAL);
@@ -41,13 +42,16 @@ export default function App() {
 
   const update = (patch) => setState((s) => ({ ...s, ...patch }));
 
+  // Is the currently-picked service a phone-only service (e.g. Airbnb)?
+  const selectedService = SERVICES.find((s) => s.key === state.service);
+  const isPhoneOnly = !!selectedService?.phoneOnly;
+
   const canGoNext = (() => {
-    if (step === 0) return !!state.service;
-    if (step === 1) return !!state.frequency;
-    if (step === 2) return state.bedrooms >= 0 && state.bathrooms >= 1;
-    if (step === 3) return true;
-    if (step === 4) return !!state.bookingDate && !!state.startTime;
-    if (step === 5) return (
+    if (step === 0) return !!state.service && !isPhoneOnly;
+    if (step === 1) return state.bedrooms >= 0 && state.bathrooms >= 1;
+    if (step === 2) return true;
+    if (step === 3) return !!state.bookingDate && !!state.startTime;
+    if (step === 4) return (
       state.firstName.trim() &&
       state.lastName.trim() &&
       /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(state.email) &&
@@ -138,12 +142,34 @@ export default function App() {
             </div>
           )}
 
-          {step === 0 && <StepService state={state} update={update} />}
-          {step === 1 && <StepFrequency state={state} update={update} />}
-          {step === 2 && <StepSize state={state} update={update} />}
-          {step === 3 && <StepExtras state={state} update={update} />}
-          {step === 4 && <StepDateTime state={state} update={update} />}
-          {step === 5 && <StepContact state={state} update={update} />}
+          {step === 0 && (
+            <>
+              <StepService state={state} update={update} />
+              {isPhoneOnly && (
+                <div className="phone-only-card">
+                  <strong>{selectedService.label} is arranged over the phone.</strong>
+                  <p>
+                    Airbnb turnovers work best when we agree the schedule, linen supply and
+                    access arrangements directly — so we handle them on a call rather than
+                    through this form. Give us a ring or drop us a message and we'll set it up
+                    the same day.
+                  </p>
+                  <a className="btn btn--primary" href={CONTACT_HREF} target="_top" rel="noreferrer">
+                    Call or message us →
+                  </a>
+                </div>
+              )}
+              <p className="form-note">
+                Looking for a <strong>weekly, fortnightly or monthly</strong> clean? Book a one-off
+                here — we'll set up the recurring schedule (and apply your discount) over the phone
+                afterwards.
+              </p>
+            </>
+          )}
+          {step === 1 && <StepSize state={state} update={update} />}
+          {step === 2 && <StepExtras state={state} update={update} />}
+          {step === 3 && <StepDateTime state={state} update={update} />}
+          {step === 4 && <StepContact state={state} update={update} />}
 
           <div className="actions">
             <button

@@ -21,31 +21,18 @@ export const SERVICES = [
     icon: '🔑',
   },
   {
-    key: 'move_in_out',
-    label: 'Move In / Out',
-    desc: 'Full clean for a fresh start',
-    icon: '📦',
-  },
-  {
     key: 'airbnb',
     label: 'Airbnb Turnover',
-    desc: 'Linen, restock, 5★-ready in under 3hr',
+    desc: 'Arranged over the phone — tap to see how',
     icon: '🏠',
-  },
-  {
-    key: 'office',
-    label: 'Office / Commercial',
-    desc: "We'll build a bespoke quote",
-    icon: '🏢',
-    custom: true,
+    phoneOnly: true,
   },
 ];
 
+// One-off only through the booking form.
+// Recurring cleans (weekly / fortnightly / monthly) are set up over the phone.
 export const FREQUENCIES = [
   { key: 'one_off', label: 'One-off', desc: 'Just this once', discount: 0 },
-  { key: 'monthly', label: 'Monthly', desc: 'Every 4 weeks', discount: 0.10, badge: 'Save 10%' },
-  { key: 'fortnightly', label: 'Fortnightly', desc: 'Every 2 weeks', discount: 0.15, badge: 'Save 15%' },
-  { key: 'weekly', label: 'Weekly', desc: 'Most popular', discount: 0.20, badge: 'Save 20%' },
 ];
 
 // Base prices by bedroom count (one-off)
@@ -55,8 +42,6 @@ export const BEDROOM_PRICES = {
   deep:    { 0: 130, 1: 160, 2: 200, 3: 250, 4: 340, 5: 400, 6: 650 },
   // Specialist services use deep as their baseline + surcharge
   end_of_tenancy: { 0: 150, 1: 190, 2: 240, 3: 300, 4: 400, 5: 470, 6: 750 },
-  move_in_out:    { 0: 140, 1: 180, 2: 230, 3: 290, 4: 390, 5: 460, 6: 740 },
-  airbnb:         { 0: 60, 1: 70, 2: 90, 3: 110, 4: 120, 5: 150, 6: 180 },
 };
 
 // Extra bathroom surcharges (each additional bath beyond first)
@@ -64,8 +49,6 @@ export const EXTRA_BATH_SURCHARGE = {
   regular: 15,
   deep: 25,
   end_of_tenancy: 30,
-  move_in_out: 28,
-  airbnb: 15,
 };
 
 export const EXTRAS = [
@@ -99,12 +82,9 @@ export function computeQuote(state) {
 
   const subtotal = base + bathSurcharge + extrasTotal;
 
-  const freq = FREQUENCIES.find((f) => f.key === frequency) || FREQUENCIES[0];
-  const discountPct = service === 'airbnb' || service === 'regular' ? freq.discount : 0;
-  // Deep clean bundled with any subscription gets 15%
-  const deepBundle = service === 'deep' && frequency !== 'one_off' ? 0.10 : 0;
-  const effectivePct = Math.max(discountPct, deepBundle);
-  const discount = +(subtotal * effectivePct).toFixed(2);
+  // One-off only through the form — recurring discounts are handled on the phone.
+  const effectivePct = 0;
+  const discount = 0;
 
   const total = +(subtotal - discount).toFixed(2);
   const deposit = +(total * DEPOSIT_PERCENT).toFixed(2);

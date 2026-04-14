@@ -452,3 +452,27 @@ a { color: var(--teal); text-decoration: none; }
 /* Utility */
 .muted { color: var(--text-muted); }
 .small { font-size: 13px; }
+
+/* Phone-only service call-out (Airbnb turnover, etc.) */
+.phone-only-card {
+  margin-top: 18px;
+  padding: 18px 20px;
+  border-radius: 14px;
+  background: rgba(59, 130, 246, 0.08);
+  border: 1px solid rgba(59, 130, 246, 0.35);
+  color: #dbeafe;
+}
+.phone-only-card strong { display: block; margin-bottom: 6px; color: #fff; font-size: 15px; }
+.phone-only-card p { margin: 0 0 12px; font-size: 14px; line-height: 1.55; }
+
+/* Inline helper note below service grid (recurring = phone) */
+.form-note {
+  margin-top: 18px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  font-size: 13px;
+  line-height: 1.5;
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text-muted);
+}
+.form-note strong { color: var(--text); }
