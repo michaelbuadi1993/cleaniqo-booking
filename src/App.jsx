@@ -514,62 +514,59 @@ function Brand() {
 function Sidebar({ state, service, propertyLabel, quote }) {
   return (
     <aside className="summary">
-      <h3 className="summary__title">Booking summary</h3>
-
-      <div className="summary__group">
-        <div className="summary__heading">Service details</div>
-        <div className="summary__row">
-          <span>Service type:</span>
-          <span>{service ? service.short : 'Not selected'}</span>
-        </div>
-        <div className="summary__row">
-          <span>Property type:</span>
-          <span>{propertyLabel}</span>
-        </div>
-        <div className="summary__row">
-          <span>Extra bathrooms:</span>
-          <span>
-            {Number(state.extraBathrooms || 0) === 0
-              ? 'None (standard included)'
-              : `${state.extraBathrooms} extra`}
-          </span>
-        </div>
-        {state.extrasNotes && state.extrasNotes.trim() && (
+      <h3 className="summary__title">Booking Summary</h3>
+      <div className="summary__body">
+        <div className="summary__group">
+          <div className="summary__heading">Service Details</div>
           <div className="summary__row">
-            <span>Additional requests:</span>
-            <span>Included in notes</span>
+            <span>Service type:</span>
+            <span>{service ? service.short : 'Not selected'}</span>
           </div>
-        )}
-        {state.bookingDate && state.startTime && (
           <div className="summary__row">
-            <span>Schedule:</span>
-            <span>{state.bookingDate} · {state.startTime}</span>
+            <span>Property type:</span>
+            <span>{propertyLabel}</span>
           </div>
-        )}
-      </div>
-
-      <div className="summary__group">
-        <div className="summary__heading">Estimated time</div>
-        <div className="summary__row">
-          <span>Cleaner:</span>
-          <span>{quote.hours ? `${quote.hours} hours` : '—'}</span>
+          <div className="summary__row">
+            <span>Extra bathrooms:</span>
+            <span>
+              {Number(state.extraBathrooms || 0) === 0
+                ? 'None (standard included)'
+                : `${state.extraBathrooms} extra`}
+            </span>
+          </div>
+          {state.extrasNotes && state.extrasNotes.trim() && (
+            <div className="summary__row">
+              <span>Additional requests:</span>
+              <span>Included in notes</span>
+            </div>
+          )}
+          {state.bookingDate && state.startTime && (
+            <div className="summary__row">
+              <span>Schedule:</span>
+              <span>{state.bookingDate} · {state.startTime}</span>
+            </div>
+          )}
         </div>
-      </div>
 
-      <div className="summary__total">
-        <span>Total — charged after clean</span>
-        <span>{money(quote.total || 0)}</span>
-      </div>
-      <div className="summary__row" style={{ marginTop: 10 }}>
-        <span>Due today</span>
-        <span>£0.00</span>
-      </div>
+        <div className="summary__group">
+          <div className="summary__heading">Estimated Time</div>
+          <div className="summary__row">
+            <span>Cleaner:</span>
+            <span>{quote.hours ? `${quote.hours} hours` : '— hours'}</span>
+          </div>
+        </div>
 
-      <p className="summary__note">
-        Your card is saved securely by Stripe when you confirm your booking. We only charge
-        the full amount once your clean is completed. Final price may shift if the property
-        condition differs from what was booked — our team will confirm before any change.
-      </p>
+        <div className="summary__total">
+          <span>Total Cost:</span>
+          <span>{money(quote.total || 0)}</span>
+        </div>
+
+        <p className="summary__note">
+          <strong>Note:</strong> Final price may vary based on property condition and specific
+          requirements. Your card is saved securely by Stripe when you confirm — no charge is taken
+          until your clean is completed.
+        </p>
+      </div>
     </aside>
   );
 }
