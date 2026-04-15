@@ -198,7 +198,6 @@ export default function App() {
     const ph = validateUkPhone(state.phone);
     if (!ph.ok) errs.phone = ph.error;
     if (!state.termsAccepted) errs.terms = 'Please accept the terms to continue';
-    if (!state.whatsappConsent) errs.whatsappConsent = 'Please confirm WhatsApp contact consent to continue';
     return errs;
   }
 
@@ -609,10 +608,10 @@ export default function App() {
                 onChange={(e) => update({ whatsappConsent: e.target.checked })}
               />
               <label htmlFor="whatsapp-consent">
-                I consent to Cleaniqo Ltd (the data controller) contacting me on WhatsApp at the
-                mobile number provided for the purposes of booking confirmations, cleaner arrival
-                updates, scheduling changes, service-related reminders and occasional
-                service-related offers. I confirm that the number provided is mine and that I am
+                <strong>Optional:</strong> I consent to Cleaniqo Ltd (the data controller)
+                contacting me on WhatsApp at the mobile number provided for the purposes of
+                booking confirmations, cleaner arrival updates, scheduling changes, service-related
+                reminders and occasional service-related offers. I confirm that the number provided is mine and that I am
                 the account holder. I understand that standard message and data rates may apply,
                 that I can withdraw this consent at any time by replying <strong>STOP</strong> to
                 any WhatsApp message or by emailing{' '}
@@ -624,7 +623,6 @@ export default function App() {
                 <a href="https://cleaniqo.co.uk/privacy" target="_top" rel="noreferrer">Privacy Policy</a>.
               </label>
             </div>
-            {fieldErrors.whatsappConsent && <div className="field__error">{fieldErrors.whatsappConsent}</div>}
           </section>
 
           <div className="submit-row">
