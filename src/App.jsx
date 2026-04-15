@@ -4,6 +4,7 @@ import {
   PROPERTY_TYPES,
   computeQuote,
   money,
+  formatEta,
   validateUkPhone,
   validateUkPostcode,
 } from './pricing.js';
@@ -665,9 +666,15 @@ function Sidebar({ state, service, propertyLabel, quote }) {
         <div className="summary__group">
           <div className="summary__heading">Estimated Time</div>
           <div className="summary__row">
-            <span>Cleaner:</span>
-            <span>{quote.hours ? `${quote.hours} hours` : '— hours'}</span>
+            <span>1 cleaner:</span>
+            <span>{formatEta(quote.etaOne) || '—'}</span>
           </div>
+          {quote.etaTwo && (
+            <div className="summary__row">
+              <span>2 cleaners:</span>
+              <span>{formatEta(quote.etaTwo)}</span>
+            </div>
+          )}
         </div>
 
         <div className="summary__total">
