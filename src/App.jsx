@@ -42,6 +42,7 @@ const INITIAL = {
   // Location
   postcode: '',
   address: '',
+  borough: '',
   // Service
   service: '',
   // Property
@@ -80,7 +81,61 @@ export default function App() {
   const [submitting, setSubmitting] = useState(false);
   const [successLeadId, setSuccessLeadId] = useState(null);
 
+  // Postcode-lookup UI state
+  const [pcLookup, setPcLookup] = useState({
+    query: '',
+    loading: false,
+    error: '',
+    addresses: [],
+    selectedIdx: '',
+  });
+
   const update = (patch) => setState((s) => ({ ...s, ...patch }));
+
+  // Trigger an address lookup for the typed postcode. Validates shape first
+  // so we never spend a lookup credit on junk input.
+  const runPostcodeLookup = async () => {
+    const pc = validateUkPostcode(pcLookup.query);
+    if (!pc.ok) {
+      setPcLookup((s) => ({ ...s, error: pc.error, addresses: [], selectedIdx: '' }));
+      return;
+    }
+    setPcLookup((s) => ({ ...s, loading: true, error: '', addresses: [], selectedIdx: '' }));
+    try {
+      const data = await api.lookupAddresses(pc.value.replace(/\s+/g, ''));
+      if (!Array.isArray(data?.addresses) || data.addresses.length === 0) {
+        setPcLookup((s) => ({ ...s, loading: false, error: 'No addresses found for that postcode.' }));
+        return;
+      }
+      setPcLookup((s) => ({
+        ...s,
+        loading: false,
+        error: '',
+        addresses: data.addresses,
+        selectedIdx: '',
+      }));
+      // Pre-fill the (read-only) postcode field with the validated one
+      update({ postcode: pc.value });
+    } catch (err) {
+      setPcLookup((s) => ({
+        ...s,
+        loading: false,
+        error: err.message || 'Address lookup failed.',
+      }));
+    }
+  };
+
+  const handleAddressSelect = (idx) => {
+    const i = Number(idx);
+    const addr = pcLookup.addresses[i];
+    if (!addr) return;
+    setPcLookup((s) => ({ ...s, selectedIdx: String(i) }));
+    update({
+      address: addr.full,
+      postcode: addr.postcode || state.postcode,
+      borough: addr.district || addr.town || state.borough,
+    });
+  };
 
   const quote = useMemo(() => computeQuote(state), [state]);
 
@@ -242,27 +297,86 @@ export default function App() {
             </div>
 
             <div className="field">
-              <label className="field__label">Postcode <span className="req">*</span></label>
-              <input
-                className="field__input"
-                placeholder="E.g. SW1A 1AA"
-                value={state.postcode}
-                onChange={(e) => update({ postcode: e.target.value.toUpperCase() })}
-                autoComplete="postal-code"
-              />
+              <label className="field__label">
+                Enter London Postcode <span className="req">*</span>
+              </label>
+              <div className="pc-row">
+                <input
+                  className="field__input"
+                  placeholder="E.g. SW1A 1AA"
+                  value={pcLookup.query}
+                  onChange={(e) =>
+                    setPcLookup((s) => ({
+                      ...s,
+                      query: e.target.value.toUpperCase(),
+                      error: '',
+                    }))
+                  }
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      runPostcodeLookup();
+                    }
+                  }}
+                  autoComplete="postal-code"
+                />
+                <button
+                  type="button"
+                  className="btn btn--ghost pc-row__btn"
+                  onClick={runPostcodeLookup}
+                  disabled={pcLookup.loading}
+                >
+                  {pcLookup.loading ? 'Looking up…' : 'Find address'}
+                </button>
+              </div>
+              <div className="field__help">Type your London postcode and pick your address from the list.</div>
+              {pcLookup.error && <div className="field__error">{pcLookup.error}</div>}
               {fieldErrors.postcode && <div className="field__error">{fieldErrors.postcode}</div>}
             </div>
+
+            {pcLookup.addresses.length > 0 && (
+              <div className="field">
+                <label className="field__label">
+                  Select your address <span className="req">*</span>
+                </label>
+                <select
+                  className="field__select"
+                  value={pcLookup.selectedIdx}
+                  onChange={(e) => handleAddressSelect(e.target.value)}
+                >
+                  <option value="">
+                    {pcLookup.addresses.length} addresses found — choose one…
+                  </option>
+                  {pcLookup.addresses.map((a, i) => (
+                    <option key={i} value={i}>{a.full}</option>
+                  ))}
+                </select>
+              </div>
+            )}
 
             <div className="field">
               <label className="field__label">Address <span className="req">*</span></label>
               <input
                 className="field__input"
-                placeholder="House / flat number and street"
+                placeholder="Address will appear here after selection"
                 value={state.address}
                 onChange={(e) => update({ address: e.target.value })}
                 autoComplete="street-address"
               />
               {fieldErrors.address && <div className="field__error">{fieldErrors.address}</div>}
+            </div>
+
+            <div className="field">
+              <label className="field__label">Postcode <span className="req">*</span></label>
+              <input
+                className="field__input"
+                placeholder="Postcode will appear here"
+                value={state.postcode}
+                onChange={(e) => update({ postcode: e.target.value.toUpperCase() })}
+                autoComplete="postal-code"
+                readOnly={!!state.postcode && !!pcLookup.addresses.length}
+              />
+              {fieldErrors.postcode && <div className="field__error">{fieldErrors.postcode}</div>}
             </div>
           </section>
 

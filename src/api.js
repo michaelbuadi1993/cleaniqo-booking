@@ -19,7 +19,19 @@ async function post(path, body) {
   return data;
 }
 
+async function get(path) {
+  const res = await fetch(`${API_BASE}${path}`);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const msg = data?.error || data?.message || `Request failed (${res.status})`;
+    throw new Error(msg);
+  }
+  return data;
+}
+
 export const api = {
   createLead: (payload) => post('/api/public/quote/lead', payload),
   createCheckout: (payload) => post('/api/public/quote/checkout-session', payload),
+  lookupAddresses: (postcode) =>
+    get(`/api/public/address-lookup?postcode=${encodeURIComponent(postcode)}`),
 };
