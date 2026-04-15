@@ -573,11 +573,11 @@ export default function App() {
           <section className="section">
             <h3 className="section__title">Payment</h3>
             <div className="note-box">
-              <strong>Debit or credit card only — no charge today.</strong>{' '}
-              Your card is saved securely by Stripe when you confirm. Nothing leaves your account
-              until your clean is completed — we only charge the full amount afterwards.
-              Cancel free of charge up to 24 hours before your slot. Cleaniqo never sees your
-              card number.
+              <strong>Debit or credit card only — you won't be charged until after the clean.</strong>{' '}
+              When you confirm, Stripe places a pending authorisation on your card for the full
+              amount. The money stays in your account and the charge only settles once the clean
+              is complete. Cancel free of charge up to 24 hours before your slot. Cleaniqo never
+              sees your card number.
             </div>
 
             <div className="terms">
@@ -677,8 +677,8 @@ function Sidebar({ state, service, propertyLabel, quote }) {
 
         <p className="summary__note">
           <strong>Note:</strong> Final price may vary based on property condition and specific
-          requirements. Your card is saved securely by Stripe when you confirm — no charge is taken
-          until your clean is completed.
+          requirements. When you confirm, Stripe places a pending authorisation on your card — the
+          charge only settles once your clean is complete.
         </p>
       </div>
     </aside>
