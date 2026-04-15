@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   SERVICES,
   PROPERTY_TYPES,
@@ -9,6 +9,34 @@ import {
 } from './pricing.js';
 import { api } from './api.js';
 import Success from './components/Success.jsx';
+
+// Broadcast the app's rendered height to the parent window so the embedding
+// iframe (e.g. Webflow) can grow/shrink with the content. Safe no-op if not
+// embedded or if the parent doesn't listen.
+function useBroadcastHeight() {
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const send = () => {
+      try {
+        const h = Math.max(
+          document.documentElement.scrollHeight,
+          document.body?.scrollHeight || 0,
+        );
+        window.parent?.postMessage({ type: 'cleaniqo:booking-height', height: h }, '*');
+      } catch (_) { /* ignore */ }
+    };
+    send();
+    const ro = new ResizeObserver(send);
+    ro.observe(document.body);
+    window.addEventListener('load', send);
+    const interval = setInterval(send, 750);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener('load', send);
+      clearInterval(interval);
+    };
+  }, []);
+}
 
 const INITIAL = {
   // Location
@@ -45,6 +73,7 @@ const BATH_OPTIONS = [
 ];
 
 export default function App() {
+  useBroadcastHeight();
   const [state, setState] = useState(INITIAL);
   const [fieldErrors, setFieldErrors] = useState({});
   const [error, setError] = useState('');

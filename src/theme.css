@@ -105,11 +105,11 @@ a:hover { color: var(--accent-2); }
   max-width: 1200px;
   margin: 0 auto;
   display: grid;
-  gap: 24px;
-  grid-template-columns: minmax(0, 1fr) 360px;
+  gap: 20px;
+  grid-template-columns: minmax(0, 1fr) 300px;
 }
 
-@media (max-width: 960px) {
+@media (max-width: 720px) {
   .shell { grid-template-columns: 1fr; }
   .summary { position: static !important; }
 }
@@ -122,6 +122,56 @@ a:hover { color: var(--accent-2); }
   border-radius: var(--radius);
   padding: 28px;
   box-shadow: var(--shadow-card);
+}
+
+/* ── Always-visible price bar at top of form ───────────────────────────────── */
+
+.pricebar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 20px;
+  margin: -4px 0 22px;
+  background: linear-gradient(135deg, rgba(0, 255, 136, 0.14), rgba(0, 255, 136, 0.04));
+  border: 1px solid rgba(0, 255, 136, 0.35);
+  border-radius: var(--radius-sm);
+  position: sticky;
+  top: 8px;
+  z-index: 5;
+  backdrop-filter: blur(6px);
+}
+.pricebar__left { min-width: 0; }
+.pricebar__label {
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #a7f3d0;
+  font-weight: 600;
+}
+.pricebar__sub {
+  margin-top: 4px;
+  font-size: 14px;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pricebar__right { text-align: right; }
+.pricebar__amount {
+  font-size: 26px;
+  font-weight: 800;
+  color: var(--text-strong);
+  letter-spacing: -0.01em;
+}
+.pricebar__note {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+@media (max-width: 520px) {
+  .pricebar { padding: 12px 14px; }
+  .pricebar__amount { font-size: 22px; }
 }
 
 .section + .section {
