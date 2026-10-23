@@ -22,7 +22,7 @@ export const SERVICES = [
     key: 'end_of_tenancy',
     label: 'End of Tenancy',
     short: 'End of Tenancy',
-    fromPrice: 100,
+    fromPrice: 120,
     desc: 'Deposit-back standard, agent approved',
   },
 ];
@@ -40,7 +40,7 @@ export const PROPERTY_TYPES = [
 ];
 
 // Base prices by property size (one-off, in GBP)
-// Deep Clean and End of Tenancy share the same base per the price list.
+// End of Tenancy is Deep + 20%.
 export const BASE_PRICES = {
   regular: {
     share:  60,
@@ -62,15 +62,17 @@ export const BASE_PRICES = {
     bed5:  400,
     bed6:  650,
   },
+  // End of Tenancy = Deep + 20% (owner, 23 Oct 2026; Cleaniqo price guide).
+  // It includes the inside oven, fridge/freezer and stairs, which are add-ons on Deep.
   end_of_tenancy: {
-    share: 100,
-    studio:130,
-    bed1:  160,
-    bed2:  200,
-    bed3:  250,
-    bed4:  340,
-    bed5:  400,
-    bed6:  650,
+    share: 120,
+    studio:156,
+    bed1:  192,
+    bed2:  240,
+    bed3:  300,
+    bed4:  408,
+    bed5:  480,
+    bed6:  780,
   },
 };
 
@@ -105,15 +107,16 @@ export const ETA_ONE_CLEANER = {
     bed5:   [9,   11],
     bed6:   [9,   11],
   },
+  // End of Tenancy = Deep + 1.5 h (oven and fridge included).
   end_of_tenancy: {
-    share:  [2,   3],
-    studio: [3,   4],
-    bed1:   [4,   5],
-    bed2:   [5,   6],
-    bed3:   [6,   7.5],
-    bed4:   [7.5, 9],
-    bed5:   [9,   11],
-    bed6:   [9,   11],
+    share:  [3.5, 4.5],
+    studio: [4.5, 5.5],
+    bed1:   [5.5, 6.5],
+    bed2:   [6.5, 7.5],
+    bed3:   [7.5, 9],
+    bed4:   [9, 10.5],
+    bed5:   [10.5, 12.5],
+    bed6:   [10.5, 12.5],
   },
 };
 
@@ -132,13 +135,13 @@ export const ETA_TWO_CLEANERS = {
   },
   end_of_tenancy: {
     share:  null,
-    studio: [1.5, 2.5],
-    bed1:   [2,   2.5],
-    bed2:   [2.5, 3.5],
-    bed3:   [3,   4],
-    bed4:   [4,   5],
-    bed5:   [4.5, 6],
-    bed6:   [6,   7.5],
+    studio: [2.25, 3.25],
+    bed1:   [2.75, 3.25],
+    bed2:   [3.25, 4.25],
+    bed3:   [3.75, 4.75],
+    bed4:   [4.75, 5.75],
+    bed5:   [5.25, 6.75],
+    bed6:   [6.75, 8.25],
   },
 };
 
