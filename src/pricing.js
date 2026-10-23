@@ -29,14 +29,14 @@ export const SERVICES = [
 
 // Property types offered by the form. `sizeKey` indexes the price/time tables below.
 export const PROPERTY_TYPES = [
-  { key: 'house_share', label: 'Bedroom in house share', sizeKey: 'share'    },
-  { key: 'studio',      label: 'Studio',                 sizeKey: 'studio'   },
-  { key: 'one_bed',     label: 'One Bedroom Property',   sizeKey: 'bed1'     },
-  { key: 'two_bed',     label: 'Two Bedroom Property',   sizeKey: 'bed2'     },
-  { key: 'three_bed',   label: 'Three Bedroom Property', sizeKey: 'bed3'     },
-  { key: 'four_bed',    label: 'Four Bedroom Property',  sizeKey: 'bed4'     },
-  { key: 'five_bed',    label: 'Five Bedroom Property',  sizeKey: 'bed5'     },
-  { key: 'six_bed',     label: 'Six Bedroom Property',   sizeKey: 'bed6'     },
+  { key: 'house_share', label: 'Bedroom in house share', sizeKey: 'share', bedrooms: 0    },
+  { key: 'studio',      label: 'Studio',                 sizeKey: 'studio', bedrooms: 0   },
+  { key: 'one_bed',     label: 'One Bedroom Property',   sizeKey: 'bed1', bedrooms: 1     },
+  { key: 'two_bed',     label: 'Two Bedroom Property',   sizeKey: 'bed2', bedrooms: 2     },
+  { key: 'three_bed',   label: 'Three Bedroom Property', sizeKey: 'bed3', bedrooms: 3     },
+  { key: 'four_bed',    label: 'Four Bedroom Property',  sizeKey: 'bed4', bedrooms: 4     },
+  { key: 'five_bed',    label: 'Five Bedroom Property',  sizeKey: 'bed5', bedrooms: 5     },
+  { key: 'six_bed',     label: 'Six Bedroom Property',   sizeKey: 'bed6', bedrooms: 6     },
 ];
 
 // Base prices by property size (one-off, in GBP)
@@ -149,6 +149,95 @@ export const EXTRA_BATH_TIME = {
   end_of_tenancy: { 0: [0,0], 1: [1,    1.25],2: [2,   2.25], 3: [2.75, 3.25],4: [3.5, 4] },
 };
 
+// ── Add-ons ─────────────────────────────────────────────────────────────────
+// Same keys, prices and minutes as the dashboard's service_extras (migration 025).
+// The server repeats this calculation and refuses a booking whose total differs.
+// Each tile is ticked on; `pick: 'one'` shows a choice, `pick: 'count'` shows
+// quantities, a tile with no `pick` is just on or off.
+const ALL = ['regular', 'deep', 'end_of_tenancy'];
+
+export const ADDONS = [
+  { id: 'oven', label: 'Inside oven', services: ['regular', 'deep'],
+    options: [{ key: 'oven', label: 'Inside oven', price: 75, minutes: 60 }] },
+  { id: 'fridge', label: 'Inside fridge', services: ['regular', 'deep'],
+    options: [{ key: 'fridge', label: 'Inside fridge', price: 30, minutes: 30 }] },
+  { id: 'upholstery', label: 'Sofa & armchair steam', services: ALL, pick: 'count',
+    minCharge: 60, setupMinutes: 15,
+    help: 'Not for leather, silk or velvet. £60 minimum. We’ll ask for a photo of the care label.',
+    options: [
+      { key: 'uph_armchair', label: 'Armchair', price: 25, minutes: 15 },
+      { key: 'uph_2seat', label: '2-seater', price: 40, minutes: 30 },
+      { key: 'uph_3seat', label: '3-seater', price: 60, minutes: 45 },
+    ] },
+  { id: 'carpet', label: 'Carpet clean', services: ALL, pick: 'count',
+    options: [{ key: 'carpet', label: 'Rooms', price: 60, minutes: 45 }] },
+  { id: 'curtains', label: 'Curtain steam', services: ['deep', 'end_of_tenancy'], pick: 'count',
+    help: 'A refresh where they hang, not stain removal. Full length = over 1.5 m drop.',
+    options: [
+      { key: 'curtain_half', label: 'Half-length pair', price: 30, minutes: 20 },
+      { key: 'curtain_full', label: 'Full-length pair', price: 40, minutes: 30 },
+    ] },
+  { id: 'windows', label: 'Outside windows', services: ALL, pick: 'one',
+    help: 'Ground floor, reachable from the ground. More windows? £3 each, added on the day.',
+    options: [
+      { key: 'windows_flat', label: 'Flat, up to 6', price: 25, minutes: 30 },
+      { key: 'windows_house', label: 'House, up to 10', price: 35, minutes: 45 },
+    ] },
+  { id: 'outdoor', label: 'Balcony, patio, garden', services: ALL, pick: 'one',
+    help: 'Sweep, clear leaves, wipe furniture. No gardening. We’ll ask for a photo.',
+    options: [
+      { key: 'balcony', label: 'Balcony / small patio', price: 30, minutes: 30 },
+      { key: 'outdoor_large', label: 'Garden / large patio', price: 50, minutes: 60 },
+    ] },
+  { id: 'stairs', label: 'Stairs', services: ['regular', 'deep'], pick: 'count',
+    options: [{ key: 'staircase', label: 'Flights', price: 25, minutes: 30 }] },
+  { id: 'garage', label: 'Garage (empty)', services: ['end_of_tenancy'], pick: 'one',
+    options: [
+      { key: 'garage_single', label: 'Single', price: 45, minutes: 45 },
+      { key: 'garage_double', label: 'Double', price: 65, minutes: 75 },
+    ] },
+  { id: 'eco', label: 'Eco products', services: ALL,
+    options: [{ key: 'eco', label: 'Eco products', price: 15, minutes: 0 }] },
+];
+
+// Shown under the add-ons on End of Tenancy, so nobody pays twice.
+export const INCLUDED_NOTE = {
+  end_of_tenancy: 'Inside oven, fridge/freezer and stairs are already included.',
+};
+
+export function addonsFor(service) {
+  return ADDONS.filter((a) => a.services.includes(service));
+}
+
+// Turn {key: qty} into priced lines for this service. Unknown, not-offered or
+// zero-quantity add-ons are dropped; the server refuses them outright.
+export function priceAddons(service, selected = {}) {
+  const lines = [];
+  let total = 0;
+  let minutes = 0;
+  for (const tile of addonsFor(service)) {
+    let tileTotal = 0;
+    let picked = 0;
+    for (const o of tile.options) {
+      const qty = Math.floor(Number(selected[o.key]) || 0);
+      if (qty < 1) continue;
+      if (tile.pick === 'one' && picked > 0) continue;   // one option only
+      const q = tile.pick === 'count' ? Math.min(qty, 20) : 1;
+      picked += 1;
+      lines.push({ key: o.key, qty: q, label: tile.options.length === 1 ? `${tile.label}${q > 1 ? ` × ${q}` : ''}` : `${tile.label} — ${o.label}${q > 1 ? ` × ${q}` : ''}`, amount: o.price * q });
+      tileTotal += o.price * q;
+      minutes += o.minutes * q;
+    }
+    if (picked && tile.minCharge && tileTotal < tile.minCharge) {
+      lines.push({ key: `${tile.id}_minimum`, qty: 1, label: `${tile.label} — minimum charge`, amount: tile.minCharge - tileTotal });
+      tileTotal = tile.minCharge;
+    }
+    if (picked && tile.setupMinutes) minutes += tile.setupMinutes;
+    total += tileTotal;
+  }
+  return { lines, total: +total.toFixed(2), minutes };
+}
+
 // Card is authorised or saved now and only charged once the clean is completed —
 // so the customer always sees the full amount as the figure to be charged.
 
@@ -163,10 +252,10 @@ function addRange(a, b) {
 
 export function computeQuote(state) {
   const empty = {
-    base: 0, bathSurcharge: 0, subtotal: 0, total: 0,
+    base: 0, bathSurcharge: 0, extras: 0, extrasLines: [], subtotal: 0, total: 0,
     etaOne: null, etaTwo: null,
   };
-  const { service, propertyType, extraBathrooms = 0 } = state;
+  const { service, propertyType, extraBathrooms = 0, addons = {} } = state;
   if (!service || !propertyType) return empty;
 
   const pt = PROPERTY_TYPES.find((p) => p.key === propertyType);
@@ -176,24 +265,28 @@ export function computeQuote(state) {
   const base = lookup(BASE_PRICES, service, size, 0);
   const baths = Math.min(Math.max(Number(extraBathrooms) || 0, 0), 4);
   const bathSurcharge = lookup(EXTRA_BATH_SURCHARGE, service, baths, 0);
+  const add = priceAddons(service, addons);
 
-  const subtotal = base + bathSurcharge;
+  const subtotal = base + bathSurcharge + add.total;
   const total = +subtotal.toFixed(2);
 
-  // Base ETA + any extra-bath time
+  // Base ETA + any extra-bath time + add-on time
+  const addHours = add.minutes / 60;
   const baseEtaOne = ETA_ONE_CLEANER?.[service]?.[size] || null;
   const bathEta    = EXTRA_BATH_TIME?.[service]?.[baths] || [0, 0];
-  const etaOne     = baseEtaOne ? addRange(baseEtaOne, bathEta) : null;
+  const etaOne     = baseEtaOne ? addRange(addRange(baseEtaOne, bathEta), [addHours, addHours]) : null;
 
-  // Two-cleaner ETA scales the extra-bath time proportionally (~halve)
+  // Two cleaners share the extra-bath and add-on time (~halve)
   const baseEtaTwo = ETA_TWO_CLEANERS?.[service]?.[size] || null;
   const etaTwo = baseEtaTwo
-    ? addRange(baseEtaTwo, [bathEta[0] / 2, bathEta[1] / 2])
+    ? addRange(baseEtaTwo, [(bathEta[0] + addHours) / 2, (bathEta[1] + addHours) / 2])
     : null;
 
   return {
     base,
     bathSurcharge,
+    extras: add.total,
+    extrasLines: add.lines,
     subtotal: +subtotal.toFixed(2),
     total,
     etaOne,
@@ -204,7 +297,8 @@ export function computeQuote(state) {
 // Format an [a,b] hours range into "2 – 2.5 hours". Handles single-value ranges.
 export function formatEta(range) {
   if (!range) return null;
-  const [a, b] = range;
+  // Round to the nearest quarter hour so add-on minutes don't show as 6.08 hours.
+  const [a, b] = range.map((h) => Math.round(h * 4) / 4);
   const fmt = (n) => (Number.isInteger(n) ? String(n) : n.toFixed(2).replace(/\.?0+$/, ''));
   if (a === b) return `${fmt(a)} hours`;
   return `${fmt(a)} – ${fmt(b)} hours`;

@@ -310,18 +310,15 @@ a:hover { color: var(--accent-2); }
 
 .extras {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  grid-template-columns: 1fr 1fr;
+  align-items: start;
   gap: 10px;
 }
 .extra {
-  display: flex;
-  align-items: center;
-  gap: 10px;
   padding: 11px 14px;
   border-radius: var(--radius-sm);
   background: var(--surface);
   border: 1px solid var(--border);
-  cursor: pointer;
   font-size: 14px;
   transition: border-color 0.15s, background 0.15s;
 }
@@ -330,8 +327,30 @@ a:hover { color: var(--accent-2); }
   border-color: var(--accent);
   background: rgba(0, 255, 136, 0.08);
 }
+.extra--checked:hover { background: rgba(0, 255, 136, 0.08); }
+@media (max-width: 560px) { .extras { grid-template-columns: 1fr; } }
+.extra__head { display: flex; align-items: center; gap: 10px; cursor: pointer; }
 .extra input { accent-color: var(--accent); }
-.extra__price { margin-left: auto; font-weight: 600; color: var(--accent-2); }
+.extra__price { margin-left: auto; font-weight: 600; color: var(--accent-2); white-space: nowrap; }
+.extra__choices { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 2px 26px; }
+.chip {
+  appearance: none; font: inherit; font-size: 13px; cursor: pointer;
+  padding: 7px 12px; border-radius: 999px;
+  background: transparent; color: var(--text);
+  border: 1px solid var(--border-strong);
+}
+.chip--on { border-color: var(--accent); color: var(--text-strong); background: var(--accent-soft); }
+.extra__counts { margin: 8px 0 0 26px; display: grid; gap: 6px; }
+.count { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 13px; }
+.count__ctl { display: inline-flex; align-items: center; gap: 4px; }
+.count__ctl button {
+  appearance: none; font: inherit; cursor: pointer; width: 30px; height: 30px; border-radius: 8px;
+  background: transparent; color: var(--text-strong); border: 1px solid var(--border-strong); line-height: 1;
+}
+.count__n { min-width: 22px; text-align: center; font-weight: 600; color: var(--text-strong); }
+.extra__help { margin: 8px 0 0 26px; font-size: 12px; color: var(--text-muted); line-height: 1.45; }
+.section__title .optional { font-size: 12px; font-weight: 500; color: var(--text-muted); margin-left: 6px; }
+.field__textarea--short { min-height: 64px; }
 
 /* ── Terms / checkbox block ────────────────────────────────────────────────── */
 

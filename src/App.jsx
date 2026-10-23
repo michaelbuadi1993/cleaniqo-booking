@@ -3,6 +3,8 @@ import {
   SERVICES,
   PROPERTY_TYPES,
   computeQuote,
+  addonsFor,
+  INCLUDED_NOTE,
   money,
   formatEta,
   validateUkPhone,
@@ -49,7 +51,9 @@ const INITIAL = {
   // Property
   propertyType: '',
   extraBathrooms: 0,
-  // Extras / add-on notes — free-form, not charged
+  // Add-ons: { add-on key: quantity }
+  addons: {},
+  // Anything else — free-form, not charged
   extrasNotes: '',
   // Schedule
   bookingDate: '',
@@ -224,9 +228,13 @@ export default function App() {
         phone: validateUkPhone(state.phone).value,
         service: state.service,
         frequency: 'one_off',
+        propertyType: state.propertyType,
         bedrooms: pt ? pt.bedrooms : 0,
         bathrooms: 1 + Number(state.extraBathrooms || 0),
-        extras: [],
+        extraBathrooms: Number(state.extraBathrooms || 0),
+        extras: quote.extrasLines
+          .filter((l) => !l.key.endsWith('_minimum'))
+          .map((l) => ({ key: l.key, qty: l.qty })),
         bookingDate: state.bookingDate,
         startTime: state.startTime,
         address: state.address.trim(),
@@ -239,8 +247,8 @@ export default function App() {
           .filter(Boolean)
           .join('\n\n') || null,
         quote: {
-          base: quote.base,
-          extras: 0,
+          base: quote.base + quote.bathSurcharge,
+          extras: quote.extras,
           total: quote.total,
           discountPct: 0,
         },
@@ -389,7 +397,7 @@ export default function App() {
               <select
                 className="field__select"
                 value={state.service}
-                onChange={(e) => update({ service: e.target.value })}
+                onChange={(e) => update({ service: e.target.value, addons: keepOffered(e.target.value, state.addons) })}
               >
                 <option value="">Select a service…</option>
                 {SERVICES.map((s) => (
@@ -445,19 +453,22 @@ export default function App() {
             </div>
           </section>
 
-          {/* ── 4. Extras ─────────────────────────────────────────────────── */}
+          {/* ── 4. Add-ons ───────────────────────────────────────────────── */}
           <section className="section">
-            <h3 className="section__title">Any additional requests?</h3>
-            <div className="field">
+            <h3 className="section__title">Add-ons <span className="optional">optional</span></h3>
+            <Addons
+              service={state.service}
+              value={state.addons}
+              onChange={(addons) => update({ addons })}
+            />
+            <div className="field" style={{ marginTop: 16 }}>
+              <label className="field__label">Anything else?</label>
               <textarea
-                className="field__textarea"
-                placeholder="E.g. inside oven, inside fridge, inside windows, balcony, ironing… message us anything extra you'd like and we'll sort it on the day."
+                className="field__textarea field__textarea--short"
+                placeholder="E.g. ironing, or anything we should know"
                 value={state.extrasNotes}
                 onChange={(e) => update({ extrasNotes: e.target.value })}
               />
-              <div className="field__help">
-                Optional — not charged here. If you'd like any add-ons, just tell us what you need and we'll organise it directly with your cleaner.
-              </div>
             </div>
           </section>
 
@@ -654,12 +665,12 @@ function Sidebar({ state, service, propertyLabel, quote }) {
                 : `${state.extraBathrooms} extra`}
             </span>
           </div>
-          {state.extrasNotes && state.extrasNotes.trim() && (
-            <div className="summary__row">
-              <span>Additional requests:</span>
-              <span>Included in notes</span>
+          {quote.extrasLines.map((l) => (
+            <div className="summary__row" key={l.key}>
+              <span>{l.label}</span>
+              <span>{money(l.amount)}</span>
             </div>
-          )}
+          ))}
           {state.bookingDate && state.startTime && (
             <div className="summary__row">
               <span>Schedule:</span>
@@ -694,5 +705,80 @@ function Sidebar({ state, service, propertyLabel, quote }) {
         </p>
       </div>
     </aside>
+  );
+}
+
+// Keep only the add-ons the new service offers.
+function keepOffered(service, addons) {
+  const keys = new Set(addonsFor(service).flatMap((t) => t.options.map((o) => o.key)));
+  return Object.fromEntries(Object.entries(addons || {}).filter(([k]) => keys.has(k)));
+}
+
+// One tile per add-on. Tick it on; if it has options, they appear underneath.
+function Addons({ service, value, onChange }) {
+  if (!service) {
+    return <div className="field__help">Choose a service above to see the add-ons.</div>;
+  }
+  const tiles = addonsFor(service);
+  const set = (patch) => {
+    const next = { ...value, ...patch };
+    Object.keys(next).forEach((k) => { if (!next[k]) delete next[k]; });
+    onChange(next);
+  };
+  const isOn = (t) => t.options.some((o) => value[o.key] > 0);
+  const toggle = (t) => {
+    if (isOn(t)) set(Object.fromEntries(t.options.map((o) => [o.key, 0])));
+    else set({ [t.options[t.options.length > 1 && t.pick === 'count' ? t.options.length - 1 : 0].key]: 1 });
+  };
+  const from = (t) => Math.min(...t.options.map((o) => o.price));
+  const unit = (t) => (t.pick === 'count' && t.options.length === 1 ? ` / ${t.options[0].label.replace(/s$/, '').toLowerCase()}` : '');
+
+  return (
+    <>
+      <div className="extras">
+        {tiles.map((t) => {
+          const on = isOn(t);
+          return (
+            <div key={t.id} className={`extra${on ? ' extra--checked' : ''}${on && (t.pick || t.help) ? ' extra--open' : ''}`}>
+              <label className="extra__head">
+                <input type="checkbox" checked={on} onChange={() => toggle(t)} />
+                <span>{t.label}</span>
+                <span className="extra__price">{t.options.length > 1 ? 'from ' : ''}{money(from(t))}{unit(t)}</span>
+              </label>
+              {on && t.pick === 'one' && (
+                <div className="extra__choices">
+                  {t.options.map((o) => (
+                    <button
+                      type="button"
+                      key={o.key}
+                      className={`chip${value[o.key] > 0 ? ' chip--on' : ''}`}
+                      onClick={() => set(Object.fromEntries(t.options.map((x) => [x.key, x.key === o.key ? 1 : 0])))}
+                    >
+                      {o.label} · {money(o.price)}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {on && t.pick === 'count' && (
+                <div className="extra__counts">
+                  {t.options.map((o) => (
+                    <div className="count" key={o.key}>
+                      <span>{t.options.length > 1 ? `${o.label} · ${money(o.price)}` : o.label}</span>
+                      <span className="count__ctl">
+                        <button type="button" aria-label={`Fewer ${o.label}`} onClick={() => set({ [o.key]: Math.max((value[o.key] || 0) - 1, 0) })}>−</button>
+                        <span className="count__n">{value[o.key] || 0}</span>
+                        <button type="button" aria-label={`More ${o.label}`} onClick={() => set({ [o.key]: Math.min((value[o.key] || 0) + 1, 20) })}>+</button>
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {on && t.help && <div className="extra__help">{t.help}</div>}
+            </div>
+          );
+        })}
+      </div>
+      {INCLUDED_NOTE[service] && <div className="field__help" style={{ marginTop: 10 }}>{INCLUDED_NOTE[service]}</div>}
+    </>
   );
 }
