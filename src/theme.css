@@ -184,8 +184,3 @@ h1 + .msg { margin: 0 0 14px; }
 .wrap--paybar .lbl { margin-top: 10px; }
 .wrap--paybar .sec h2 { margin-bottom: 0; }
 .lcard .sum + .lrow__team { margin-top: -4px; }
-.lprice { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 14px; padding: 14px 0 10px; font-size: 15px; }
-.lprice .k { color: var(--muted); }
-.lprice .v { text-align: right; color: #fff; }
-.lprice__t { font-weight: 700; color: #fff; font-size: 18px; padding-top: 8px; border-top: 1px solid var(--line); }
-.lcard .lrow__team { margin: 0 0 12px; }
