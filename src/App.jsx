@@ -175,9 +175,11 @@ export default function App() {
         on, addons, day: r.expired ? '' : (p.day || ''), time: r.expired ? '' : (p.time || ''), postcode: p.postcode || '', address: p.address || '',
         access: p.access || 'home', accessNote: p.accessNote || '', pref: p.pref || 'any', pets: p.pets && typeof p.pets === 'object' ? p.pets : {},
         firstName: r.customer?.firstName || '', lastName: r.customer?.lastName || '', phone: r.customer?.phone || '', email: r.customer?.email || '',
-        link: linkToken, jump: r.expired ? 'day' : 'details',
+        link: linkToken, jump: r.expired ? 'day' : (p.postcode && p.address ? 'details' : 'postcode'),
       }));
-      setLinkNote(r.expired ? 'This link has run out, so please choose a new day and time. Everything else is filled in.' : 'We’ve filled in your clean from your chat with us. Just add your details and book.');
+      setLinkNote(r.expired ? 'This link has run out, so please choose a new day and time. Everything else is filled in.'
+        : p.postcode && p.address ? 'We’ve filled in your clean from your chat with us. Just add your details and book.'
+        : 'We’ve filled in your clean from your chat with us. Just add your address and details, and book.');
     }).catch((e) => { if (!off) setLinkNote(e.message || ''); });
     return () => { off = true; };
   }, [linkToken]);   // eslint-disable-line react-hooks/exhaustive-deps
@@ -186,6 +188,8 @@ export default function App() {
   // Anything changed after a quote was made means a fresh quote when they book.
   const set = (patch) => setS((x) => ({ ...x, ...patch, leadId: null, token: null, photosSent: 0 }));
   const go = (patch) => setS((x) => ({ ...x, ...(patch || {}), i: x.i + 1, ...(patch ? { leadId: null, token: null, photosSent: 0 } : {}) }));
+  // From a booking link the rest is already answered, so after the address they go straight to their details.
+  const afterAddress = (patch) => (s.link ? setS((x) => ({ ...x, ...patch, leadId: null, token: null, photosSent: 0, jump: 'details' })) : go(patch));
   const back = () => { setError(''); setS((x) => ({ ...x, i: Math.max(0, x.i - 1) })); };
 
   const booking = s.path === 'home' || s.path === 'spec';
@@ -502,7 +506,7 @@ export default function App() {
           {addr.list.length > 0 && (
             <div className="list" role="group" aria-label="Your address">
               {addr.list.map((a) => (
-                <button type="button" key={a.full} onClick={() => go({ address: a.full, postcode: (validateUkPostcode(a.postcode).value || pc.value), borough: a.district || a.town || '' })}>
+                <button type="button" key={a.full} onClick={() => afterAddress({ address: a.full, postcode: (validateUkPostcode(a.postcode).value || pc.value), borough: a.district || a.town || '' })}>
                   {a.full}, {validateUkPostcode(a.postcode).value || pc.value}
                 </button>
               ))}
@@ -513,7 +517,7 @@ export default function App() {
             <>
               <label className="lbl" htmlFor="ad">First line of the address</label>
               <input id="ad" className="inp" value={s.address} placeholder="e.g. Flat 2, 14 Elm Road" autoComplete="address-line1" onChange={(e) => set({ address: e.target.value })} />
-              <button type="button" className="btn" disabled={!pc.ok || s.address.trim().length < 4} onClick={() => go({ address: s.address.trim(), postcode: pc.value })}>Continue</button>
+              <button type="button" className="btn" disabled={!pc.ok || s.address.trim().length < 4} onClick={() => afterAddress({ address: s.address.trim(), postcode: pc.value })}>Continue</button>
             </>
           )}
         </>
@@ -723,7 +727,7 @@ export default function App() {
         <div className="pbar" role="progressbar" aria-label="Progress" aria-valuenow={progress} aria-valuemin={0} aria-valuemax={100}><span style={{ width: `${progress}%` }} /></div>
         <h1 ref={h1} tabIndex={-1}>{q}</h1>
         {sub && <p className="sub">{sub}</p>}
-        {linkNote && (cur === 'details' || cur === 'day' || cur === 'start') && <div className="msg msg--info" role="status">{linkNote}</div>}
+        {linkNote && (cur === 'details' || cur === 'day' || cur === 'start' || cur === 'postcode') && <div className="msg msg--info" role="status">{linkNote}</div>}
         {body}
       </div>
       {showBar && (
