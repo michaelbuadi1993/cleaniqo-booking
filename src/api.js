@@ -38,7 +38,18 @@ async function uploadPhoto(leadId, token, file) {
   return post('/api/public/quote/photo-done', { leadId, token, photoId: slot.photoId });
 }
 
+// A photo for the photo check at booking (060): upload slot, straight to storage, then the server checks the file.
+async function uploadSessionPhoto(sessionId, token, file) {
+  const slot = await post('/api/public/quote/photo-session/upload', { sessionId, token, mimeType: file.type, sizeBytes: file.size });
+  const put = await fetch(slot.uploadUrl, { method: 'PUT', headers: { 'Content-Type': file.type }, body: file });
+  if (!put.ok) throw new Error('Upload failed');
+  return post('/api/public/quote/photo-session/done', { sessionId, token, photoId: slot.photoId });
+}
+
 export const api = {
+  photoSession: (choices) => post('/api/public/quote/photo-session', choices),
+  uploadSessionPhoto,
+  checkPhotos: (sessionId, token) => post('/api/public/quote/photo-session/check', { sessionId, token }),
   createLead: (payload) => post('/api/public/quote/lead', payload),
   createCheckout: (payload) => post('/api/public/quote/checkout-session', payload),
   callback: (payload) => post('/api/public/callback', payload),

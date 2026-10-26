@@ -64,18 +64,18 @@ const KIND_NAME = { regular: 'Regular clean', deep: 'Deep clean', end_of_tenancy
 const ACCESS = { home: 'I’ll be in', keysafe: 'Key safe', concierge: 'Concierge or neighbour', other: 'Something else' };
 const NOTE_Q = { keysafe: 'Where’s the key safe?', concierge: 'Who has the key?', other: 'How do we get in?' };
 const NOTE_PH = { keysafe: 'Where it is, and the code', concierge: 'Name or flat number', other: 'Tell us how' };
+const LEVEL_TEXT = { moderate: 'Moderately dirty', heavy: 'Heavily soiled' };
 const PREF = { any: 'Don’t mind', female: 'Female', male: 'Male' };
 const PETS = { none: 'No pets', dog: 'Dog', cat: 'Cat', other: 'Other pets' };
 const petText = (p) => ['dog', 'cat', 'other'].filter((k) => p[k]).map((k) => PETS[k].toLowerCase()).join(', ');
 const TIMES = ['08:00', '09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00'];
-const PHOTO_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'];
 const MAX_PHOTOS = 6;
 const SAVED = 'cleaniqo:booking';
 
 const INITIAL = {
   path: '', i: 0, service: '', size: '', baths: 0, on: {}, addons: {}, day: '', time: '', postcode: '', address: '', borough: '',
   access: '', accessNote: '', pref: '', pets: {}, firstName: '', lastName: '', name: '', phone: '', email: '', terms: false,
-  leadId: null, token: null, photosSent: 0,
+  leadId: null, token: null, photosSent: 0, ph: null,
 };
 
 // Today's date in London, then the next days as YYYY-MM-DD.
@@ -106,6 +106,23 @@ function Tile({ icon, label, sub, on, multi, onClick, className = '' }) {
       {sub && <span className="ts">{sub}</span>}
     </button>
   );
+}
+
+// Photos are made smaller in the browser (longest side 1600 px, JPEG) before they're sent: quicker on a phone, and
+// iPhone HEIC photos arrive as JPEG. Returns null when the browser can't read the file.
+async function shrink(file) {
+  try {
+    const bmp = await createImageBitmap(file);
+    const k = Math.min(1, 1600 / Math.max(bmp.width, bmp.height));
+    const c = document.createElement('canvas');
+    c.width = Math.round(bmp.width * k); c.height = Math.round(bmp.height * k);
+    c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height);
+    const blob = await new Promise((res) => c.toBlob(res, 'image/jpeg', 0.82));
+    if (!blob) throw new Error('no blob');
+    return new File([blob], (file.name || 'photo').replace(/\.[^.]+$/, '') + '.jpg', { type: 'image/jpeg' });
+  } catch (_) {
+    return ['image/jpeg', 'image/png', 'image/webp'].includes(file.type) && file.size <= 5 * 1024 * 1024 ? file : null;
+  }
 }
 
 function readSaved() {
@@ -153,17 +170,21 @@ export default function App() {
   const needsQty = onTiles.some((t) => t.pick);
   const quote = useMemo(() => computeQuote({ service, propertyType: s.size, extraBathrooms: Math.min(Math.max(s.baths - 1, 0), 4), addons: s.addons }), [service, s.size, s.baths, s.addons]);
 
+  // The provisional photo price (060): the same percentage the server applies, on the price-list price before add-ons.
+  const photoExtra = s.ph && s.ph.pct > 0 && service !== 'specialist' ? Math.round((quote.base + quote.bathSurcharge) * s.ph.pct) / 100 : 0;
+  const total = Math.round((quote.total + photoExtra) * 100) / 100;
+
   // Over about 4 hours for one cleaner, we may send a team (owner, 26 Oct 2026: "for specific jobs we may send a team").
   const bigJob = !!quote.etaOne && quote.etaOne[1] > 4;
 
   const screens = useMemo(() => {
     if (done) return ['done'];
-    const end = ['day', 'time', 'postcode', 'access', ...(s.access && s.access !== 'home' ? ['note'] : []), 'pref', 'pets', 'photos', 'details', 'review'];
+    const end = ['day', 'time', 'postcode', 'access', ...(s.access && s.access !== 'home' ? ['note'] : []), 'pref', 'pets', 'photos', ...(s.ph && s.ph.priced ? ['photoresult'] : []), 'details', 'review'];
     if (s.path === 'home') return ['start', 'kind', 'size', 'baths', 'extras', ...(needsQty ? ['qty'] : []), ...end];
     if (s.path === 'spec') return ['start', 'spec', ...(needsQty ? ['qty'] : []), ...end];
     if (s.path === 'regular' || s.path === 'turnover') return ['start', 'callback'];
     return ['start'];
-  }, [done, s.path, s.access, needsQty]);
+  }, [done, s.path, s.access, needsQty, s.ph]);
   const cur = screens[Math.min(s.i, screens.length - 1)];
 
   useEffect(() => {
@@ -209,20 +230,45 @@ export default function App() {
   };
 
   // ── photos ────────────────────────────────────────────────────────────────
-  const addPhotos = (files) => {
-    const picked = Array.from(files || []);
-    const ok = picked.filter((f) => PHOTO_TYPES.includes(f.type) && f.size <= 10 * 1024 * 1024);
+  const addPhotos = async (files) => {
+    const picked = Array.from(files || []).filter((f) => f.type.startsWith('image/') || /\.(heic|heif)$/i.test(f.name));
     const room = MAX_PHOTOS - photos.length;
-    const take = ok.slice(0, room);
-    setPhotoMsg(picked.length > take.length
-      ? (ok.length < picked.length ? 'Some files were skipped: photos only, up to 10 MB each.' : `Up to ${MAX_PHOTOS} photos.`)
-      : '');
-    if (take.length) {
-      setPhotos((p) => [...p, ...take.map((file) => ({ file, url: URL.createObjectURL(file) }))]);
-      set({});
+    const out = [];
+    for (const f of picked.slice(0, room)) { const small = await shrink(f); if (small) out.push(small); }
+    const skipped = Array.from(files || []).length - out.length;
+    setPhotoMsg(skipped > 0 ? (picked.length > room ? `Up to ${MAX_PHOTOS} photos.` : 'Some files couldn’t be read. Try a JPEG or PNG photo.') : '');
+    if (out.length) {
+      setPhotos((p) => [...p, ...out.map((file) => ({ file, url: URL.createObjectURL(file) }))]);
+      set({ ph: null });
     }
   };
-  const removePhoto = (k) => { setPhotos((p) => { URL.revokeObjectURL(p[k].url); return p.filter((_, j) => j !== k); }); set({}); setPhotoMsg(''); };
+  const removePhoto = (k) => { setPhotos((p) => { URL.revokeObjectURL(p[k].url); return p.filter((_, j) => j !== k); }); set({ ph: null }); setPhotoMsg(''); };
+
+  // Send the photos and, when the photo price is on, let Claude look at them before the customer goes on.
+  const sendPhotos = async () => {
+    setError('');
+    try {
+      setBusy('Sending your photos…');
+      const sess = await api.photoSession({ service, propertyType: service === 'specialist' ? undefined : s.size,
+        extraBathrooms: Math.min(Math.max(s.baths - 1, 0), 4), extras: quote.extrasLines.filter((l) => !l.key.endsWith('_minimum')).map((l) => ({ key: l.key, qty: l.qty })) });
+      let sent = 0;
+      for (let k = 0; k < photos.length; k += 1) {
+        setBusy(`Sending your photos… ${k + 1} of ${photos.length}`);
+        try { await api.uploadSessionPhoto(sess.sessionId, sess.token, photos[k].file); sent += 1; } catch (_) { /* skip this one */ }
+      }
+      let ph = { id: sess.sessionId, token: sess.token, sent, priced: false, level: null, pct: 0, reasons: [] };
+      if (sess.priced && sent > 0) {
+        setBusy('Looking at your photos…');
+        const r = await api.checkPhotos(sess.sessionId, sess.token);
+        ph = { ...ph, priced: !!r.priced, level: r.level, pct: Number(r.pct || 0), reasons: r.reasons || [] };
+      }
+      setBusy('');
+      go({ ph });
+    } catch (e) {
+      setBusy('');
+      setError(e.status === 503 ? 'Photos aren’t available just now. You can skip them.' : (e.message || 'Your photos couldn’t be sent. Try again, or skip them.'));
+    }
+  };
 
   // ── details ───────────────────────────────────────────────────────────────
   const phoneOk = validateUkPhone(s.phone).ok;
@@ -262,17 +308,11 @@ export default function App() {
           extras: quote.extrasLines.filter((l) => !l.key.endsWith('_minimum')).map((l) => ({ key: l.key, qty: l.qty })),
           bookingDate: s.day, startTime: s.time, address: s.address.trim(), postcode: pc.value, borough: s.borough || undefined,
           cleanerPreference: s.pref || 'any', specialInstructions: instructions(),
-          quote: { base: quote.base + quote.bathSurcharge, extras: quote.extras, total: quote.total, discountPct: 0 },
+          quote: { base: quote.base + quote.bathSurcharge, extras: quote.extras, total, discountPct: 0 },
+          ...(s.ph ? { photoSessionId: s.ph.id, photoToken: s.ph.token } : {}),
         });
         leadId = lead.id; token = lead.uploadToken;
-        sent = 0;
-        // Photos are a nice-to-have: if any fail, the booking still goes ahead.
-        if (photos.length && token) {
-          for (let k = 0; k < photos.length; k += 1) {
-            setBusy(`Sending photos… ${k + 1} of ${photos.length}`);
-            try { await api.uploadPhoto(leadId, token, photos[k].file); sent += 1; } catch (_) { /* skip this one */ }
-          }
-        }
+        sent = s.ph ? s.ph.sent : 0;
         setS((x) => ({ ...x, leadId, token, photosSent: sent }));
       }
       setBusy('Opening secure payment…');
@@ -498,7 +538,7 @@ export default function App() {
                 <input type="file" accept="image/*" multiple className="sr" onChange={(e) => { addPhotos(e.target.files); e.target.value = ''; }} />
                 <Icon name="camera" /><span className="tt">Add photos</span><span className="ts">Stains, delicate or hard-to-reach spots</span>
               </label>
-              <Tile icon="arrow" label="Skip" sub="Nothing special" onClick={() => go()} />
+              <Tile icon="arrow" label="Skip" sub="Nothing special" onClick={() => go({ ph: null })} />
             </div>
           ) : (
             <>
@@ -516,13 +556,35 @@ export default function App() {
                   </label>
                 )}
               </div>
-              <button type="button" className="btn" onClick={() => go()}>Continue with {photos.length} photo{photos.length === 1 ? '' : 's'}</button>
+              <button type="button" className="btn" disabled={!!busy} onClick={() => (s.ph && s.ph.sent === photos.length ? go() : sendPhotos())}>{busy || `Continue with ${photos.length} photo${photos.length === 1 ? '' : 's'}`}</button>
             </>
           )}
           {photoMsg && <div className="msg msg--amber" role="status">{photoMsg}</div>}
+          {error && <div className="msg msg--red" role="alert">{error}</div>}
         </>
       );
       break;
+    case 'photoresult': {
+      const more = photoExtra > 0;
+      q = more ? 'From your photos' : 'Thanks for the photos';
+      sub = more ? 'Your home looks like it needs a bit more time than usual.' : 'Nothing unusual: no change to your price.';
+      body = (
+        <>
+          <div className={`pres${more ? ' pres--more' : ''}`}>
+            <div className="pres__top">
+              <span className="pres__level">{more ? LEVEL_TEXT[s.ph.level] : 'As expected'}</span>
+              <b className="pres__amt">{more ? `+${money(photoExtra)}` : money(0)}</b>
+            </div>
+            {more && s.ph.reasons.length > 0 && <ul className="pres__why">{s.ph.reasons.map((r) => <li key={r}>{r}</li>)}</ul>}
+            <p className="pres__note">{more
+              ? 'This is provisional. Our team checks your photos before the clean and can only lower it, never raise it. Your card is held, not charged, until the clean is done.'
+              : 'Our team will still look at them, so your cleaner arrives with the right kit.'}</p>
+          </div>
+          <button type="button" className="btn" onClick={() => go()}>Continue</button>
+        </>
+      );
+      break;
+    }
     case 'details':
       q = 'Your details'; sub = 'For your confirmation and updates on the day';
       body = (
@@ -544,6 +606,7 @@ export default function App() {
       if (service !== 'specialist' && quote.base) lines.push([`${KIND_NAME[service]}, ${(SIZE_SHORT[s.size] || '').toLowerCase()}`, quote.base]);
       if (quote.bathSurcharge) lines.push([`${Math.min(s.baths - 1, 4)} extra bathroom${s.baths > 2 ? 's' : ''}`, quote.bathSurcharge]);
       quote.extrasLines.forEach((l) => lines.push([l.label, l.amount]));
+      if (photoExtra > 0) lines.push([`From your photos: ${LEVEL_TEXT[s.ph.level].toLowerCase()} (provisional)`, photoExtra]);
       const rows = [
         ['When', s.day ? `${dayName(s.day, { weekday: 'short', day: 'numeric', month: 'short' })}, ${s.time}` : ''],
         ['Where', `${s.address}, ${pc.value}`],
@@ -556,7 +619,7 @@ export default function App() {
         <>
           <div className="sum">
             {lines.map(([k, v]) => <Fragment key={k}><span className="k">{k}</span><span className="v">{money(v)}</span></Fragment>)}
-            <span className="sum__total">Total</span><span className="v sum__total">{money(quote.total)}</span>
+            <span className="sum__total">Total</span><span className="v sum__total">{money(total)}</span>
           </div>
           {bigJob && <div className="msg msg--info">For a bigger job like this, we may send a team of cleaners so it’s finished sooner. The price stays the same.</div>}
           <dl className="sum sum--info">
@@ -570,7 +633,7 @@ export default function App() {
             </span>
           </label>
           {error && <div className="msg msg--red" role="alert">{error}</div>}
-          <button type="button" className="btn" disabled={!s.terms || !!busy} onClick={book}>{busy || `Book · ${money(quote.total)}`}</button>
+          <button type="button" className="btn" disabled={!s.terms || !!busy} onClick={book}>{busy || `Book · ${money(total)}`}</button>
           <p className="note">Your card is held, not charged. You pay once the clean is done. Free to cancel up to 24 hours before.</p>
         </>
       );
@@ -634,7 +697,7 @@ export default function App() {
       {showBar && (
         <div className="bar">
           <div className="barin">
-            <b>{money(quote.total)}</b>
+            <b>{money(total)}</b>
             <span>{eta && <>About {eta}{bigJob ? ' for one cleaner' : ''}<br /></>}Pay after the clean</span>
           </div>
         </div>
