@@ -325,7 +325,6 @@ export default function App() {
   const [codeErr, setCodeErr] = useState('');
   const [codeBusy, setCodeBusy] = useState(false);
   const [codeOpen, setCodeOpen] = useState(false);   // one-page booking: "Have a discount code?" opens the box
-  const [linesOpen, setLinesOpen] = useState(false); // one-page booking: "See what's included"
   const [nudge, setNudge] = useState('');            // one-page booking: the field Book took them to
   const choices = () => ({ service, ...(service === 'specialist' ? {} : { propertyType: s.size, extraBathrooms: Math.min(Math.max(s.baths - 1, 0), 4) }),
     extras: quote.extrasLines.filter((l) => !l.key.endsWith('_minimum')).map((l) => ({ key: l.key, qty: l.qty })) });
@@ -743,7 +742,7 @@ export default function App() {
       // One page (owner, 26 Oct 2026: "it shouldn't be too many pages i think it should be one, that also has a section
       // for discount codes too"), kept to about one phone screen: a compact summary of what was agreed, their details,
       // and Book always on screen. Book with something missing takes them to it.
-      q = 'Your booking'; sub = 'Filled in from your chat with us. Just add your details and book.';
+      q = 'Your booking'; sub = 'Just add your details and book.';
       const whenOk = !!s.day && !!s.time;
       const whereOk = s.addrSet && pc.ok && s.address.trim().length >= 4;
       const needs = [
@@ -759,21 +758,16 @@ export default function App() {
         setNudge(id); setTimeout(() => setNudge(''), 2200);
       };
       const n = (id) => (nudge === id ? ' need' : '');
-      const what = [service !== 'specialist' ? `${KIND_NAME[service]}, ${(SIZE_SHORT[s.size] || '').toLowerCase()}` : '',
-        quote.bathSurcharge ? `${Math.min(s.baths - 1, 4)} extra bathroom${s.baths > 2 ? 's' : ''}` : '',
-        ...quote.extrasLines.filter((l) => !l.key.endsWith('_minimum')).map((l) => l.label.toLowerCase())].filter(Boolean).join(' + ');
       const getIn = s.access === 'home' ? ACCESS.home : `${ACCESS[s.access]}${s.accessNote ? `: ${s.accessNote}` : ''}`;
       const pets = s.pets.none ? '' : petText(s.pets);
       body = (
         <>
           <div className="lcard" aria-label="Your clean">
-            <div className="lrow lrow--what">
-              <span className="lrow__main"><b>{what.replace(/^./, (c) => c.toUpperCase())}</b>
-                <span className="lrow__sub">{getIn}{pets ? ` · ${pets.replace(/^./, (c) => c.toUpperCase())}` : ''}</span></span>
-              <b className="lrow__amt">{money(total)}</b>
+            <div className="lprice" aria-label="Price">
+              {priceLines().map(([k, v]) => <Fragment key={k}><span className="k">{k}</span><span className="v">{v}</span></Fragment>)}
+              <span className="lprice__t">Total</span><span className="v lprice__t">{money(total)}</span>
             </div>
-            <button type="button" className="lmore" aria-expanded={linesOpen} onClick={() => setLinesOpen((o) => !o)}>{linesOpen ? 'Hide the price breakdown' : 'See the price breakdown'}</button>
-            {linesOpen && <>{sumBox}{bigJob && <p className="lrow__sub lrow__team">A bigger job: we may send a team so it’s finished sooner, at the same price.</p>}</>}
+            <p className="lrow__sub lrow__team">{getIn}{pets ? ` · ${pets.replace(/^./, (c) => c.toUpperCase())}` : ''}{bigJob ? ' · A bigger job, so we may send a team (same price).' : ''}</p>
 
             {whenOk && !s.linkExpired ? (
               <div className="lrow"><span className="lrow__k">When</span><span className="lrow__main">{dayName(s.day, { weekday: 'short', day: 'numeric', month: 'short' })}, {s.time}</span>
