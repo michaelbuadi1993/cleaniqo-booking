@@ -1,30 +1,22 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import {
-  SERVICES,
-  PROPERTY_TYPES,
-  computeQuote,
-  addonsFor,
-  INCLUDED_NOTE,
-  money,
-  formatEta,
-  validateUkPhone,
-  validateUkPostcode,
-} from './pricing.js';
-import { api } from './api.js';
-import Success from './components/Success.jsx';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
+import { PROPERTY_TYPES, computeQuote, addonsFor, INCLUDED_NOTE, money, formatEta, validateUkPhone, validateUkPostcode } from './pricing.js';
+import { api, WHATSAPP_URL } from './api.js';
 
-// Broadcast the app's rendered height to the parent window so the embedding
-// iframe (e.g. Webflow) can grow/shrink with the content. Safe no-op if not
-// embedded or if the parent doesn't listen.
+/*
+ * The booking page, one question per screen (owner, 26 Oct 2026: "super simplified", "headache free").
+ * One-off cleans and specialist cleans (carpets, sofas, ovens…) are booked and paid here as before
+ * (lead → Stripe → webhook). Regular cleaners and Airbnb turnovers leave their details for a call back,
+ * or go straight to WhatsApp. Prices come from pricing.js; the server re-prices and refuses any difference.
+ */
+
+// Broadcast the app's rendered height to the parent window so the embedding iframe (Webflow) can grow and
+// shrink with the content. Safe no-op if not embedded or if the parent doesn't listen.
 function useBroadcastHeight() {
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const send = () => {
       try {
-        const h = Math.max(
-          document.documentElement.scrollHeight,
-          document.body?.scrollHeight || 0,
-        );
+        const h = Math.max(document.documentElement.scrollHeight, document.body?.scrollHeight || 0);
         window.parent?.postMessage({ type: 'cleaniqo:booking-height', height: h }, '*');
       } catch (_) { /* ignore */ }
     };
@@ -33,752 +25,597 @@ function useBroadcastHeight() {
     ro.observe(document.body);
     window.addEventListener('load', send);
     const interval = setInterval(send, 750);
-    return () => {
-      ro.disconnect();
-      window.removeEventListener('load', send);
-      clearInterval(interval);
-    };
+    return () => { ro.disconnect(); window.removeEventListener('load', send); clearInterval(interval); };
   }, []);
 }
 
+// Simple line icons (24px grid).
+const ICONS = {
+  home: 'M4 20h16M6 20V9l6-5 6 5v11M10 20v-5h4v5',
+  sofa: 'M4 11V8a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v3M2 12a2 2 0 0 1 4 0v2h12v-2a2 2 0 0 1 4 0v5H2zM5 17v2M19 17v2',
+  plan: 'M3 12a9 9 0 0 1 15.5-6.2L21 8M21 3v5h-5M21 12a9 9 0 0 1-15.5 6.2L3 16M3 21v-5h5',
+  key: 'M7.5 20a4.5 4.5 0 1 0 0-9 4.5 4.5 0 0 0 0 9zM10.7 12.3 21 2M17 6l3 3M15 8l2 2',
+  deep: 'M12 3l1.8 4.7L18.5 9.5l-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8z',
+  box: 'M3 8l9-5 9 5v8l-9 5-9-5zM3 8l9 5 9-5M12 13v8',
+  carpet: 'M4 5h16v14H4zM4 9h16M4 15h16',
+  oven: 'M4 4h16v16H4zM4 9h16M8 13h8v4H8z',
+  window: 'M4 3h16v18H4zM12 3v18M4 12h16',
+  fridge: 'M6 2h12v20H6zM6 10h12M9 5v2M9 13v3',
+  curtain: 'M3 3h18M6 3v18c2-3 3-8 3-18M18 3v18c-2-3-3-8-3-18',
+  stairs: 'M3 21h5v-5h5v-5h5V6h3',
+  eco: 'M11 20A7 7 0 0 1 4 13c0-6 7-9 16-9 0 9-3 16-9 16zM4 20l7-7',
+  leaf: 'M12 22V12M12 12C12 7 8 4 3 4c0 5 3 8 9 8zM12 12c0-4 3-7 9-7 0 4-3 7-9 7',
+  garage: 'M3 21V9l9-6 9 6v12M7 21v-8h10v8M7 17h10',
+  me: 'M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM5 21v-1a6 6 0 0 1 12 0v1',
+  lock: 'M5 11h14v10H5zM8 11V7a4 4 0 0 1 8 0v4',
+  door: 'M6 21V3h12v18M14 12h.01',
+  any: 'M9 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM16 11a3 3 0 1 0 0-6M3 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2M17 15a4 4 0 0 1 4 4v2',
+  dots: 'M5 12h.01M12 12h.01M19 12h.01',
+  camera: 'M4 7h3l2-3h6l2 3h3v13H4zM12 17a4 4 0 1 0 0-8 4 4 0 0 0 0 8z',
+  arrow: 'M5 12h14M13 6l6 6-6 6',
+  calendar: 'M4 5h16v16H4zM4 10h16M8 3v4M16 3v4',
+};
+const TILE_ICON = { oven: 'oven', fridge: 'fridge', upholstery: 'sofa', carpet: 'carpet', curtains: 'curtain', windows: 'window', outdoor: 'leaf', stairs: 'stairs', garage: 'garage', eco: 'eco' };
+const TILE_SHORT = { upholstery: 'Sofa & armchairs', carpet: 'Carpets', curtains: 'Curtains', windows: 'Outside windows', outdoor: 'Balcony or garden', garage: 'Garage', eco: 'Eco products', stairs: 'Stairs', oven: 'Oven', fridge: 'Fridge' };
+const SIZE_SHORT = { house_share: 'Room in a share', studio: 'Studio', one_bed: '1 bed', two_bed: '2 beds', three_bed: '3 beds', four_bed: '4 beds', five_bed: '5 beds', six_bed: '6 beds' };
+const KIND_NAME = { regular: 'Regular clean', deep: 'Deep clean', end_of_tenancy: 'Moving-out clean', specialist: 'Specialist clean' };
+const ACCESS = { home: 'I’ll be in', keysafe: 'Key safe', concierge: 'Concierge or neighbour', other: 'Something else' };
+const NOTE_Q = { keysafe: 'Where’s the key safe?', concierge: 'Who has the key?', other: 'How do we get in?' };
+const NOTE_PH = { keysafe: 'Where it is, and the code', concierge: 'Name or flat number', other: 'Tell us how' };
+const PREF = { any: 'Don’t mind', female: 'Female', male: 'Male' };
+const TIMES = ['08:00', '09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00'];
+const PHOTO_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'];
+const MAX_PHOTOS = 6;
+const SAVED = 'cleaniqo:booking';
+
 const INITIAL = {
-  // Location
-  postcode: '',
-  address: '',
-  borough: '',
-  // Service
-  service: '',
-  // Property
-  propertyType: '',
-  extraBathrooms: 0,
-  // Add-ons: { add-on key: quantity }
-  addons: {},
-  // Anything else — free-form, not charged
-  extrasNotes: '',
-  // Schedule
-  bookingDate: '',
-  startTime: '',
-  // Customer
-  firstName: '',
-  lastName: '',
-  email: '',
-  phone: '',
-  // Notes
-  accessNotes: '',
-  specialInstructions: '',
-  // Terms
-  termsAccepted: false,
+  path: '', i: 0, service: '', size: '', baths: 0, on: {}, addons: {}, day: '', time: '', postcode: '', address: '', borough: '',
+  access: '', accessNote: '', pref: '', firstName: '', lastName: '', name: '', phone: '', email: '', terms: false,
+  leadId: null, token: null, photosSent: 0,
 };
 
-const BATH_OPTIONS = [
-  { v: 0, label: '0 (Property standard)' },
-  { v: 1, label: '1 extra' },
-  { v: 2, label: '2 extra' },
-  { v: 3, label: '3 extra' },
-  { v: 4, label: '4 extra' },
-];
+// Today's date in London, then the next days as YYYY-MM-DD.
+function londonDays(from, n) {
+  const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/London' }).format(new Date());
+  const base = new Date(`${today}T12:00:00Z`);
+  return Array.from({ length: n }, (_, k) => {
+    const d = new Date(base.getTime() + (from + k) * 864e5);
+    return d.toISOString().slice(0, 10);
+  });
+}
+const dayName = (iso, opts) => new Date(`${iso}T12:00:00Z`).toLocaleDateString('en-GB', { timeZone: 'UTC', ...opts });
+
+function Icon({ name, size = 36 }) {
+  return (
+    <svg className="ic" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d={ICONS[name]} />
+    </svg>
+  );
+}
+
+function Tile({ icon, label, sub, on, multi, onClick, className = '' }) {
+  return (
+    <button type="button" className={`tile${icon ? '' : ' num'} ${className}`} aria-pressed={on ? 'true' : 'false'} onClick={onClick}>
+      {multi && on && <span className="ck" aria-hidden="true">✓</span>}
+      {icon && <Icon name={icon} />}
+      <span className="tt">{label}</span>
+      {sub && <span className="ts">{sub}</span>}
+    </button>
+  );
+}
+
+function readSaved() {
+  try { return JSON.parse(sessionStorage.getItem(SAVED) || 'null'); } catch (_) { return null; }
+}
+function writeSaved(s) {
+  try { sessionStorage.setItem(SAVED, JSON.stringify(s)); } catch (_) { /* private mode: fine */ }
+}
+function clearSaved() {
+  try { sessionStorage.removeItem(SAVED); } catch (_) { /* ignore */ }
+}
 
 export default function App() {
   useBroadcastHeight();
-  const [state, setState] = useState(INITIAL);
-  const [fieldErrors, setFieldErrors] = useState({});
-  const [error, setError] = useState('');
-  const [submitting, setSubmitting] = useState(false);
-  const [successLeadId, setSuccessLeadId] = useState(null);
+  const params = new URLSearchParams(window.location.search);
+  const paid = params.get('success') === '1';
+  const cancelled = params.get('cancelled') === '1';
 
-  // Postcode-lookup UI state
-  const [pcLookup, setPcLookup] = useState({
-    query: '',
-    loading: false,
-    error: '',
-    addresses: [],
-    selectedIdx: '',
+  // Back from Stripe without paying: put them back on the last screen with everything as they left it.
+  const [s, setS] = useState(() => {
+    if (cancelled) { const saved = readSaved(); if (saved) return { ...INITIAL, ...saved }; }
+    return INITIAL;
   });
+  const [photos, setPhotos] = useState([]);           // { file, url }
+  const [photoMsg, setPhotoMsg] = useState('');
+  const [addr, setAddr] = useState({ loading: false, error: '', list: [], manual: false });
+  const [busy, setBusy] = useState('');
+  const [error, setError] = useState('');
+  const [done, setDone] = useState(paid ? 'booked' : '');
+  const [moreDates, setMoreDates] = useState(false);
+  const h1 = useRef(null);
 
-  const update = (patch) => setState((s) => ({ ...s, ...patch }));
+  useEffect(() => { if (paid) clearSaved(); }, [paid]);
+  useEffect(() => () => photos.forEach((p) => URL.revokeObjectURL(p.url)), []);   // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Trigger an address lookup for the typed postcode. Validates shape first
-  // so we never spend a lookup credit on junk input.
-  const runPostcodeLookup = async () => {
-    const pc = validateUkPostcode(pcLookup.query);
-    if (!pc.ok) {
-      setPcLookup((s) => ({ ...s, error: pc.error, addresses: [], selectedIdx: '' }));
-      return;
+  // Anything changed after a quote was made means a fresh quote when they book.
+  const set = (patch) => setS((x) => ({ ...x, ...patch, leadId: null, token: null, photosSent: 0 }));
+  const go = (patch) => setS((x) => ({ ...x, ...(patch || {}), i: x.i + 1, ...(patch ? { leadId: null, token: null, photosSent: 0 } : {}) }));
+  const back = () => { setError(''); setS((x) => ({ ...x, i: Math.max(0, x.i - 1) })); };
+
+  const booking = s.path === 'home' || s.path === 'spec';
+  const service = s.path === 'spec' ? 'specialist' : s.service;
+  const tiles = useMemo(() => (service ? addonsFor(service) : []), [service]);
+  const onTiles = tiles.filter((t) => s.on[t.id]);
+  const needsQty = onTiles.some((t) => t.pick);
+  const quote = useMemo(() => computeQuote({ service, propertyType: s.size, extraBathrooms: Math.min(Math.max(s.baths - 1, 0), 4), addons: s.addons }), [service, s.size, s.baths, s.addons]);
+
+  const screens = useMemo(() => {
+    if (done) return ['done'];
+    const end = ['day', 'time', 'postcode', 'access', ...(s.access && s.access !== 'home' ? ['note'] : []), 'pref', 'photos', 'details', 'review'];
+    if (s.path === 'home') return ['start', 'kind', 'size', 'baths', 'extras', ...(needsQty ? ['qty'] : []), ...end];
+    if (s.path === 'spec') return ['start', 'spec', ...(needsQty ? ['qty'] : []), ...end];
+    if (s.path === 'regular' || s.path === 'turnover') return ['start', 'callback'];
+    return ['start'];
+  }, [done, s.path, s.access, needsQty]);
+  const cur = screens[Math.min(s.i, screens.length - 1)];
+
+  useEffect(() => {
+    try { window.scrollTo({ top: 0 }); } catch (_) { /* ignore */ }
+    h1.current?.focus({ preventScroll: true });
+    window.parent?.postMessage({ type: 'cleaniqo:booking-step', step: cur }, '*');
+  }, [cur]);
+
+  // ── add-ons ───────────────────────────────────────────────────────────────
+  const toggleTile = (t) => {
+    const addons = { ...s.addons };
+    const on = { ...s.on };
+    t.options.forEach((o) => { delete addons[o.key]; });
+    if (on[t.id]) delete on[t.id];
+    else {
+      on[t.id] = true;
+      // On/off and "pick one" start on the first option; a single counted option starts at 1;
+      // several counted options (armchair, 2-seater…) start empty and are chosen on the next screen.
+      if (!t.pick || t.pick === 'one' || t.options.length === 1) addons[t.options[0].key] = 1;
     }
-    setPcLookup((s) => ({ ...s, loading: true, error: '', addresses: [], selectedIdx: '' }));
+    set({ on, addons });
+  };
+  const tileFrom = (t) => {
+    const p = Math.min(...t.options.map((o) => o.price));
+    if (t.options.length > 1) return `from ${money(p)}`;
+    return t.pick === 'count' ? `${money(p)} each` : money(p);
+  };
+  const qtyOk = onTiles.every((t) => t.options.some((o) => (s.addons[o.key] || 0) > 0));
+
+  // ── address ───────────────────────────────────────────────────────────────
+  const pc = validateUkPostcode(s.postcode);
+  const findAddress = async () => {
+    if (!pc.ok) return;
+    setS((x) => ({ ...x, postcode: pc.value }));   // always shown in full, e.g. SE5 8JA
+    setAddr({ loading: true, error: '', list: [], manual: false });
     try {
       const data = await api.lookupAddresses(pc.value.replace(/\s+/g, ''));
-      if (!Array.isArray(data?.addresses) || data.addresses.length === 0) {
-        setPcLookup((s) => ({ ...s, loading: false, error: 'No addresses found for that postcode.' }));
-        return;
-      }
-      setPcLookup((s) => ({
-        ...s,
-        loading: false,
-        error: '',
-        addresses: data.addresses,
-        selectedIdx: '',
-      }));
-      // Pre-fill the (read-only) postcode field with the validated one
-      update({ postcode: pc.value });
-    } catch (err) {
-      setPcLookup((s) => ({
-        ...s,
-        loading: false,
-        error: err.message || 'Address lookup failed.',
-      }));
+      const list = Array.isArray(data?.addresses) ? data.addresses : [];
+      setAddr({ loading: false, error: list.length ? '' : 'We couldn’t find addresses for that postcode. Type yours instead.', list, manual: !list.length });
+    } catch (_) {
+      setAddr({ loading: false, error: 'Address search isn’t working just now. Type your address instead.', list: [], manual: true });
     }
   };
 
-  const handleAddressSelect = (idx) => {
-    const i = Number(idx);
-    const addr = pcLookup.addresses[i];
-    if (!addr) return;
-    setPcLookup((s) => ({ ...s, selectedIdx: String(i) }));
-    update({
-      address: addr.full,
-      postcode: addr.postcode || state.postcode,
-      borough: addr.district || addr.town || state.borough,
-    });
-  };
-
-  const quote = useMemo(() => computeQuote(state), [state]);
-
-  // URL params for post-Stripe state
-  const urlParams = new URLSearchParams(window.location.search);
-  const postPaymentSuccess = urlParams.get('success') === '1';
-  const postPaymentCancelled = urlParams.get('cancelled') === '1';
-
-  if (postPaymentSuccess) {
-    return (
-      <div className="app">
-        <Brand />
-        <div className="shell" style={{ gridTemplateColumns: '1fr' }}>
-          <div className="card success">
-            <div className="success__icon">✓</div>
-            <h2 className="success__title">Booking confirmed!</h2>
-            <p className="success__sub">
-              Your card is saved and your Cleaniqo team is being assigned — you'll only be charged
-              once the clean is completed. Check your inbox for the confirmation email with your
-              booking reference and arrival window.
-            </p>
-            <a href="/" className="btn btn--primary">Book another clean</a>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  if (successLeadId) {
-    return (
-      <div className="app">
-        <Brand />
-        <div className="shell" style={{ gridTemplateColumns: '1fr' }}>
-          <Success leadId={successLeadId} />
-        </div>
-      </div>
-    );
-  }
-
-  const selectedService = SERVICES.find((s) => s.key === state.service);
-  const propertyLabel =
-    PROPERTY_TYPES.find((p) => p.key === state.propertyType)?.label || 'Not selected';
-
-  const today = new Date().toISOString().slice(0, 10);
-
-  function validate() {
-    const errs = {};
-    const pc = validateUkPostcode(state.postcode);
-    if (!pc.ok) errs.postcode = pc.error;
-    if (!state.address.trim()) errs.address = 'Address is required';
-    if (!state.service) errs.service = 'Choose a service';
-    if (!state.propertyType) errs.propertyType = 'Select a property type';
-    if (!state.bookingDate) errs.bookingDate = 'Pick a date';
-    if (!state.startTime) errs.startTime = 'Pick a start time';
-    if (!state.firstName.trim()) errs.firstName = 'First name is required';
-    if (!state.lastName.trim()) errs.lastName = 'Last name is required';
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(state.email || '')) errs.email = 'Valid email required';
-    const ph = validateUkPhone(state.phone);
-    if (!ph.ok) errs.phone = ph.error;
-    if (!state.termsAccepted) errs.terms = 'Please accept the terms to continue';
-    return errs;
-  }
-
-  const handleSubmit = async () => {
-    setError('');
-    const errs = validate();
-    setFieldErrors(errs);
-    if (Object.keys(errs).length > 0) {
-      setError('Please fix the highlighted fields above.');
-      // scroll to first error
-      setTimeout(() => {
-        const firstErr = document.querySelector('.field__error');
-        firstErr?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      }, 50);
-      return;
+  // ── photos ────────────────────────────────────────────────────────────────
+  const addPhotos = (files) => {
+    const picked = Array.from(files || []);
+    const ok = picked.filter((f) => PHOTO_TYPES.includes(f.type) && f.size <= 10 * 1024 * 1024);
+    const room = MAX_PHOTOS - photos.length;
+    const take = ok.slice(0, room);
+    setPhotoMsg(picked.length > take.length
+      ? (ok.length < picked.length ? 'Some files were skipped: photos only, up to 10 MB each.' : `Up to ${MAX_PHOTOS} photos.`)
+      : '');
+    if (take.length) {
+      setPhotos((p) => [...p, ...take.map((file) => ({ file, url: URL.createObjectURL(file) }))]);
+      set({});
     }
+  };
+  const removePhoto = (k) => { setPhotos((p) => { URL.revokeObjectURL(p[k].url); return p.filter((_, j) => j !== k); }); set({}); setPhotoMsg(''); };
 
-    setSubmitting(true);
+  // ── details ───────────────────────────────────────────────────────────────
+  const phoneOk = validateUkPhone(s.phone).ok;
+  const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s.email.trim());
+  const detailsOk = s.firstName.trim().length > 0 && s.lastName.trim().length > 0 && phoneOk && emailOk;
+  const callbackOk = s.name.trim().length > 1 && phoneOk && pc.ok && (!s.email.trim() || emailOk);
+
+  const sendCallback = async () => {
+    setError(''); setBusy('Sending…');
     try {
-      const pt = PROPERTY_TYPES.find((p) => p.key === state.propertyType);
-      const payload = {
-        firstName: state.firstName.trim(),
-        lastName: state.lastName.trim(),
-        email: state.email.trim().toLowerCase(),
-        phone: validateUkPhone(state.phone).value,
-        service: state.service,
-        frequency: 'one_off',
-        propertyType: state.propertyType,
-        bedrooms: pt ? pt.bedrooms : 0,
-        bathrooms: 1 + Number(state.extraBathrooms || 0),
-        extraBathrooms: Number(state.extraBathrooms || 0),
-        extras: quote.extrasLines
-          .filter((l) => !l.key.endsWith('_minimum'))
-          .map((l) => ({ key: l.key, qty: l.qty })),
-        bookingDate: state.bookingDate,
-        startTime: state.startTime,
-        address: state.address.trim(),
-        postcode: validateUkPostcode(state.postcode).value,
-        specialInstructions: [
-          state.accessNotes,
-          state.extrasNotes ? `Additional requests: ${state.extrasNotes}` : '',
-          state.specialInstructions,
-        ]
-          .filter(Boolean)
-          .join('\n\n') || null,
-        quote: {
-          base: quote.base + quote.bathSurcharge,
-          extras: quote.extras,
-          total: quote.total,
-          discountPct: 0,
-        },
-      };
-
-      const lead = await api.createLead(payload);
-      const session = await api.createCheckout({
-        leadId: lead.id,
-        successUrl: `${window.location.origin}/?success=1&lead=${lead.id}`,
-        cancelUrl: `${window.location.origin}/?cancelled=1&lead=${lead.id}`,
-      });
-      if (session?.url) {
-        // Escape the iframe on Webflow if embedded
-        (window.top || window).location.href = session.url;
-        return;
-      }
-      setSuccessLeadId(lead.id);
-    } catch (err) {
-      setError(err.message || 'Something went wrong. Please try again.');
-    } finally {
-      setSubmitting(false);
-    }
+      await api.callback({ kind: s.path, name: s.name.trim(), phone: validateUkPhone(s.phone).value, postcode: pc.value, email: s.email.trim() || null });
+      setDone('callback');
+      setS((x) => ({ ...x, i: 0 }));
+    } catch (e) {
+      setError(e.message || 'Something went wrong. Please try again, or message us on WhatsApp.');
+    } finally { setBusy(''); }
   };
+
+  const instructions = () => [
+    s.access ? `Access: ${ACCESS[s.access]}${s.accessNote.trim() && s.access !== 'home' ? ` — ${s.accessNote.trim()}` : ''}` : '',
+    s.pref && s.pref !== 'any' ? `Cleaner preference: ${s.pref}` : '',
+  ].filter(Boolean).join('\n') || null;
+
+  const book = async () => {
+    setError('');
+    try {
+      let { leadId, token } = s;
+      let sent = s.photosSent;
+      if (!leadId) {
+        setBusy('Saving your booking…');
+        const pt = PROPERTY_TYPES.find((p) => p.key === s.size);
+        const lead = await api.createLead({
+          firstName: s.firstName.trim(), lastName: s.lastName.trim(), email: s.email.trim().toLowerCase(), phone: validateUkPhone(s.phone).value,
+          service, frequency: 'one_off',
+          ...(service === 'specialist' ? {} : { propertyType: s.size, bedrooms: pt ? pt.bedrooms : 0, bathrooms: Math.max(s.baths, 1), extraBathrooms: Math.min(Math.max(s.baths - 1, 0), 4) }),
+          extras: quote.extrasLines.filter((l) => !l.key.endsWith('_minimum')).map((l) => ({ key: l.key, qty: l.qty })),
+          bookingDate: s.day, startTime: s.time, address: s.address.trim(), postcode: pc.value, borough: s.borough || undefined,
+          cleanerPreference: s.pref || 'any', specialInstructions: instructions(),
+          quote: { base: quote.base + quote.bathSurcharge, extras: quote.extras, total: quote.total, discountPct: 0 },
+        });
+        leadId = lead.id; token = lead.uploadToken;
+        sent = 0;
+        // Photos are a nice-to-have: if any fail, the booking still goes ahead.
+        if (photos.length && token) {
+          for (let k = 0; k < photos.length; k += 1) {
+            setBusy(`Sending photos… ${k + 1} of ${photos.length}`);
+            try { await api.uploadPhoto(leadId, token, photos[k].file); sent += 1; } catch (_) { /* skip this one */ }
+          }
+        }
+        setS((x) => ({ ...x, leadId, token, photosSent: sent }));
+      }
+      setBusy('Opening secure payment…');
+      writeSaved({ ...s, leadId, token, photosSent: sent, i: screens.indexOf('review') });
+      const session = await api.createCheckout({
+        leadId,
+        successUrl: `${window.location.origin}/?success=1&lead=${leadId}`,
+        cancelUrl: `${window.location.origin}/?cancelled=1&lead=${leadId}`,
+      });
+      if (session?.url) { (window.top || window).location.href = session.url; return; }
+      setError('We couldn’t open the payment page. Please try again in a moment.');
+    } catch (e) {
+      setError(e.message || 'Something went wrong. Please try again.');
+    }
+    setBusy('');
+  };
+
+  // ── screens ───────────────────────────────────────────────────────────────
+  let q = '', sub = '', body = null;
+  const days = londonDays(1, 8);
+  switch (cur) {
+    case 'start':
+      q = 'What do you need?'; sub = 'Tap one';
+      body = (
+        <>
+          {cancelled && !s.path && <div className="msg msg--amber">Payment cancelled. Nothing was taken.</div>}
+          <div className="g2" role="group" aria-label={q}>
+            <Tile icon="home" label="Clean my home" sub="One-off, deep or moving out" onClick={() => setS({ ...INITIAL, path: 'home', i: 1 })} />
+            <Tile icon="sofa" label="Carpets, sofas, ovens & more" sub="On their own" onClick={() => setS({ ...INITIAL, path: 'spec', i: 1 })} />
+            <Tile icon="plan" label="A regular cleaner" sub="Weekly or fortnightly" onClick={() => setS({ ...INITIAL, path: 'regular', i: 1 })} />
+            <Tile icon="key" label="Airbnb turnovers" sub="For hosts" onClick={() => setS({ ...INITIAL, path: 'turnover', i: 1 })} />
+          </div>
+          <p className="note">Not sure? <a href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer" className="wa-link">Ask us on WhatsApp</a></p>
+        </>
+      );
+      break;
+    case 'kind':
+      q = 'What kind of clean?';
+      body = (
+        <div className="g3" role="group" aria-label={q}>
+          {[['regular', 'Regular', 'home', 'from £60'], ['deep', 'Deep', 'deep', 'from £100'], ['end_of_tenancy', 'Moving out', 'box', 'from £120']].map(([k, l, ic, sb]) => (
+            <Tile key={k} icon={ic} label={l} sub={sb} on={s.service === k}
+              onClick={() => { const keep = addonsFor(k).map((t) => t.id); const on = {}; const addons = {};
+                Object.keys(s.on).forEach((id) => { if (keep.includes(id)) on[id] = true; });
+                addonsFor(k).forEach((t) => t.options.forEach((o) => { if (on[t.id] && s.addons[o.key]) addons[o.key] = s.addons[o.key]; }));
+                go({ service: k, on, addons }); }} />
+          ))}
+        </div>
+      );
+      break;
+    case 'size':
+      q = 'How big is it?';
+      body = (
+        <div className="g2" role="group" aria-label={q}>
+          {PROPERTY_TYPES.map((p) => <Tile key={p.key} label={SIZE_SHORT[p.key] || p.label} on={s.size === p.key} onClick={() => go({ size: p.key })} />)}
+        </div>
+      );
+      break;
+    case 'baths':
+      q = 'How many bathrooms?'; sub = 'One is included';
+      body = (
+        <div className="gflex" style={{ '--cols': 5, '--pcols': 5 }} role="group" aria-label={q}>
+          {[1, 2, 3, 4, 5].map((n) => <Tile key={n} label={n === 5 ? '5+' : String(n)} on={s.baths === n} onClick={() => go({ baths: n })} />)}
+        </div>
+      );
+      break;
+    case 'extras':
+    case 'spec':
+      q = cur === 'spec' ? 'What needs cleaning?' : 'Anything extra?';
+      sub = cur === 'spec' ? 'Tap any' : (INCLUDED_NOTE[service] ? `Optional. ${INCLUDED_NOTE[service]}` : 'Optional. Tap any you’d like.');
+      body = (
+        <>
+          <div className="gflex" style={{ '--cols': [3, 5, 6, 9].includes(tiles.length) ? 3 : 4 }} role="group" aria-label={q}>
+            {tiles.map((t) => <Tile key={t.id} multi icon={TILE_ICON[t.id] || 'dots'} label={TILE_SHORT[t.id] || t.label} sub={tileFrom(t)} on={!!s.on[t.id]} onClick={() => toggleTile(t)} />)}
+          </div>
+          <button type="button" className="btn" disabled={cur === 'spec' && !onTiles.length} onClick={() => go()}>
+            {cur === 'extras' && !onTiles.length ? 'No thanks' : 'Continue'}
+          </button>
+        </>
+      );
+      break;
+    case 'qty':
+      q = 'Which ones?';
+      body = (
+        <>
+          {onTiles.filter((t) => t.pick).map((t) => (
+            <fieldset key={t.id} className="qgroup">
+              <legend>{TILE_SHORT[t.id] || t.label}</legend>
+              {t.help && <p className="ts qhelp">{t.help}</p>}
+              {t.pick === 'one' ? (
+                <div className="g2">
+                  {t.options.map((o) => (
+                    <Tile key={o.key} label={o.label} sub={money(o.price)} on={(s.addons[o.key] || 0) > 0} className="opt"
+                      onClick={() => { const addons = { ...s.addons }; t.options.forEach((x) => { delete addons[x.key]; }); addons[o.key] = 1; set({ addons }); }} />
+                  ))}
+                </div>
+              ) : t.options.map((o) => {
+                const n = s.addons[o.key] || 0;
+                const min = t.options.length === 1 ? 1 : 0;
+                const label = t.options.length === 1 ? `${o.label}` : o.label;
+                const put = (v) => { const addons = { ...s.addons }; if (v > 0) addons[o.key] = v; else delete addons[o.key]; set({ addons }); };
+                return (
+                  <div className="qty" key={o.key}>
+                    <span><b>{label}</b><span className="ts" style={{ display: 'block' }}>{money(o.price)} each</span></span>
+                    <span className="stp">
+                      <button type="button" aria-label={`Fewer: ${o.label}`} disabled={n <= min} onClick={() => put(Math.max(min, n - 1))}>−</button>
+                      <span aria-live="polite">{n}</span>
+                      <button type="button" aria-label={`More: ${o.label}`} disabled={n >= 20} onClick={() => put(Math.min(20, n + 1))}>+</button>
+                    </span>
+                  </div>
+                );
+              })}
+            </fieldset>
+          ))}
+          <button type="button" className="btn" disabled={!qtyOk} onClick={() => go()}>Continue</button>
+        </>
+      );
+      break;
+    case 'day':
+      q = 'Which day?';
+      body = (
+        <>
+          <div className="g2" role="group" aria-label={q}>
+            {days.map((d) => <Tile key={d} label={dayName(d, { weekday: 'short' })} sub={dayName(d, { day: 'numeric', month: 'short' })} on={s.day === d} onClick={() => go({ day: d })} />)}
+          </div>
+          {!moreDates && <button type="button" className="link" onClick={() => setMoreDates(true)}>Another date</button>}
+          {moreDates && (
+            <label className="lbl">Pick a date
+              <input type="date" className="inp" min={days[0]} max={londonDays(1, 120).pop()} value={s.day && !days.includes(s.day) ? s.day : ''}
+                onChange={(e) => e.target.value && go({ day: e.target.value })} />
+            </label>
+          )}
+        </>
+      );
+      break;
+    case 'time':
+      q = 'What time?'; sub = 'When we arrive';
+      body = (
+        <div className="g3" role="group" aria-label={q}>
+          {TIMES.map((t) => <Tile key={t} label={t} on={s.time === t} onClick={() => go({ time: t })} />)}
+        </div>
+      );
+      break;
+    case 'postcode':
+      q = 'Where is it?'; sub = 'We clean across London';
+      body = (
+        <>
+          <label className="lbl" htmlFor="pc">Postcode</label>
+          <input id="pc" className="inp inp--pc" value={s.postcode} placeholder="e.g. SE5 8JA" autoComplete="postal-code"
+            onChange={(e) => { set({ postcode: e.target.value.toUpperCase(), address: '', borough: '' }); setAddr({ loading: false, error: '', list: [], manual: false }); }}
+            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); findAddress(); } }} />
+          {!addr.list.length && !addr.manual && (
+            <button type="button" className="btn" disabled={!pc.ok || addr.loading} onClick={findAddress}>{addr.loading ? 'Looking…' : 'Find my address'}</button>
+          )}
+          {addr.error && <div className="msg msg--amber" role="status">{addr.error}</div>}
+          {addr.list.length > 0 && (
+            <div className="list" role="group" aria-label="Your address">
+              {addr.list.map((a) => (
+                <button type="button" key={a.full} onClick={() => go({ address: a.full, postcode: (validateUkPostcode(a.postcode).value || pc.value), borough: a.district || a.town || '' })}>
+                  {a.full}, {validateUkPostcode(a.postcode).value || pc.value}
+                </button>
+              ))}
+              <button type="button" className="list__other" onClick={() => setAddr((x) => ({ ...x, list: [], manual: true }))}>It’s not here</button>
+            </div>
+          )}
+          {addr.manual && (
+            <>
+              <label className="lbl" htmlFor="ad">First line of the address</label>
+              <input id="ad" className="inp" value={s.address} placeholder="e.g. Flat 2, 14 Elm Road" autoComplete="address-line1" onChange={(e) => set({ address: e.target.value })} />
+              <button type="button" className="btn" disabled={!pc.ok || s.address.trim().length < 4} onClick={() => go({ address: s.address.trim(), postcode: pc.value })}>Continue</button>
+            </>
+          )}
+        </>
+      );
+      break;
+    case 'access':
+      q = 'How will we get in?';
+      body = (
+        <div className="g2" role="group" aria-label={q}>
+          {[['home', 'me'], ['keysafe', 'lock'], ['concierge', 'door'], ['other', 'dots']].map(([k, ic]) => (
+            <Tile key={k} icon={ic} label={ACCESS[k]} on={s.access === k} onClick={() => go({ access: k, ...(k !== s.access ? { accessNote: '' } : {}) })} />
+          ))}
+        </div>
+      );
+      break;
+    case 'note':
+      q = NOTE_Q[s.access] || 'How do we get in?'; sub = 'Only your cleaner sees this';
+      body = (
+        <>
+          <input className="inp" value={s.accessNote} placeholder={NOTE_PH[s.access] || ''} aria-label={q} onChange={(e) => set({ accessNote: e.target.value })} />
+          <button type="button" className="btn" disabled={s.accessNote.trim().length < 3} onClick={() => go()}>Continue</button>
+        </>
+      );
+      break;
+    case 'pref':
+      q = 'Any preference for your cleaner?';
+      body = (
+        <div className="g3" role="group" aria-label={q}>
+          {[['any', 'any'], ['female', 'me'], ['male', 'me']].map(([k, ic]) => <Tile key={k} icon={ic} label={PREF[k]} on={s.pref === k} onClick={() => go({ pref: k })} />)}
+        </div>
+      );
+      break;
+    case 'photos':
+      q = 'Want us to check for niggly bits?'; sub = 'A few photos help us arrive with the right kit and time. Our team looks at them; only we see them.';
+      body = (
+        <>
+          {photos.length === 0 ? (
+            <div className="g2">
+              <label className="tile">
+                <input type="file" accept="image/*" multiple className="sr" onChange={(e) => { addPhotos(e.target.files); e.target.value = ''; }} />
+                <Icon name="camera" /><span className="tt">Add photos</span><span className="ts">Oven, bathroom, anything tricky</span>
+              </label>
+              <Tile icon="arrow" label="Skip" sub="Maybe later" onClick={() => go()} />
+            </div>
+          ) : (
+            <>
+              <div className="thumbs">
+                {photos.map((p, k) => (
+                  <span className="thumb" key={p.url}>
+                    <img src={p.url} alt={`Photo ${k + 1}`} />
+                    <button type="button" aria-label={`Remove photo ${k + 1}`} onClick={() => removePhoto(k)}>×</button>
+                  </span>
+                ))}
+                {photos.length < MAX_PHOTOS && (
+                  <label className="thumb thumb--add">
+                    <input type="file" accept="image/*" multiple className="sr" onChange={(e) => { addPhotos(e.target.files); e.target.value = ''; }} />
+                    <span aria-hidden="true">+</span><span className="sr">Add more photos</span>
+                  </label>
+                )}
+              </div>
+              <button type="button" className="btn" onClick={() => go()}>Continue with {photos.length} photo{photos.length === 1 ? '' : 's'}</button>
+            </>
+          )}
+          {photoMsg && <div className="msg msg--amber" role="status">{photoMsg}</div>}
+        </>
+      );
+      break;
+    case 'details':
+      q = 'Your details'; sub = 'For your confirmation and updates on the day';
+      body = (
+        <>
+          <div className="row2">
+            <label className="lbl">First name<input className="inp" value={s.firstName} autoComplete="given-name" onChange={(e) => set({ firstName: e.target.value })} /></label>
+            <label className="lbl">Last name<input className="inp" value={s.lastName} autoComplete="family-name" onChange={(e) => set({ lastName: e.target.value })} /></label>
+          </div>
+          <label className="lbl">Mobile<input className="inp" type="tel" inputMode="tel" value={s.phone} placeholder="07123 456789" autoComplete="tel-national" onChange={(e) => set({ phone: e.target.value })} /></label>
+          {s.phone.replace(/\s/g, '').length >= 11 && !phoneOk && <div className="err">{validateUkPhone(s.phone).error}</div>}
+          <label className="lbl">Email<input className="inp" type="email" value={s.email} autoComplete="email" onChange={(e) => set({ email: e.target.value })} /></label>
+          <button type="button" className="btn" disabled={!detailsOk} onClick={() => go()}>Continue</button>
+        </>
+      );
+      break;
+    case 'review': {
+      q = 'All good?';
+      const lines = [];
+      if (service !== 'specialist' && quote.base) lines.push([`${KIND_NAME[service]}, ${(SIZE_SHORT[s.size] || '').toLowerCase()}`, quote.base]);
+      if (quote.bathSurcharge) lines.push([`${Math.min(s.baths - 1, 4)} extra bathroom${s.baths > 2 ? 's' : ''}`, quote.bathSurcharge]);
+      quote.extrasLines.forEach((l) => lines.push([l.label, l.amount]));
+      const rows = [
+        ['When', s.day ? `${dayName(s.day, { weekday: 'short', day: 'numeric', month: 'short' })}, ${s.time}` : ''],
+        ['Where', `${s.address}, ${pc.value}`],
+        ['Getting in', s.access === 'home' ? ACCESS.home : `${ACCESS[s.access]}: ${s.accessNote}`],
+        ...(s.pref && s.pref !== 'any' ? [['Cleaner', PREF[s.pref]]] : []),
+        ...(photos.length || s.photosSent ? [['Photos', `${photos.length || s.photosSent} for us to check`]] : []),
+      ];
+      body = (
+        <>
+          <div className="sum">
+            {lines.map(([k, v]) => <Fragment key={k}><span className="k">{k}</span><span className="v">{money(v)}</span></Fragment>)}
+            <span className="sum__total">Total</span><span className="v sum__total">{money(quote.total)}</span>
+          </div>
+          <dl className="sum sum--info">
+            {rows.map(([k, v]) => <div key={k}><dt>{k}</dt><dd>{v}</dd></div>)}
+          </dl>
+          <label className="tk">
+            <input type="checkbox" checked={s.terms} onChange={(e) => setS((x) => ({ ...x, terms: e.target.checked }))} />
+            <span>
+              I agree to the <a href="https://cleaniqo.co.uk/terms" target="_top" rel="noreferrer">Terms</a> and{' '}
+              <a href="https://cleaniqo.co.uk/privacy" target="_top" rel="noreferrer">Privacy Policy</a>, and to Cleaniqo contacting me about this booking by text, email, phone or WhatsApp.
+            </span>
+          </label>
+          {error && <div className="msg msg--red" role="alert">{error}</div>}
+          <button type="button" className="btn" disabled={!s.terms || !!busy} onClick={book}>{busy || `Book · ${money(quote.total)}`}</button>
+          <p className="note">Your card is held, not charged. You pay once the clean is done. Free to cancel up to 24 hours before.</p>
+        </>
+      );
+      break;
+    }
+    case 'callback': {
+      const host = s.path === 'turnover';
+      q = host ? 'Airbnb turnovers' : 'A regular cleaner';
+      sub = 'Leave a few details and one of our team will call you. Or chat to us on WhatsApp straight away.';
+      body = (
+        <>
+          <label className="lbl">Name<input className="inp" value={s.name} autoComplete="name" onChange={(e) => set({ name: e.target.value })} /></label>
+          <label className="lbl">Mobile<input className="inp" type="tel" inputMode="tel" value={s.phone} placeholder="07123 456789" autoComplete="tel-national" onChange={(e) => set({ phone: e.target.value })} /></label>
+          <label className="lbl">Postcode<input className="inp inp--upper" value={s.postcode} placeholder="e.g. SE5 8JA" autoComplete="postal-code" onChange={(e) => set({ postcode: e.target.value.toUpperCase() })} /></label>
+          <label className="lbl">Email <span className="opt-l">(optional)</span><input className="inp" type="email" value={s.email} autoComplete="email" onChange={(e) => set({ email: e.target.value })} /></label>
+          {error && <div className="msg msg--red" role="alert">{error}</div>}
+          <button type="button" className="btn" disabled={!callbackOk || !!busy} onClick={sendCallback}>{busy || 'Call me back'}</button>
+          <div className="or"><span className="note">or</span>
+            <a className="wa" href={`${WHATSAPP_URL}?text=${encodeURIComponent(host ? 'Hi, I’d like to talk about Airbnb turnovers.' : 'Hi, I’d like a regular cleaner.')}`} target="_blank" rel="noopener noreferrer">Chat on WhatsApp now</a>
+          </div>
+        </>
+      );
+      break;
+    }
+    case 'done':
+      q = done === 'booked' ? 'You’re booked!' : 'Thanks, we’ll call you';
+      body = (
+        <div className="done">
+          <div className="done__tick" aria-hidden="true">✓</div>
+          <p className="sub">
+            {done === 'booked'
+              ? 'We’ve emailed your confirmation. We’ll message you when your cleaner is on the way.'
+              : 'A member of our team will call you, usually within one working day. Want to talk now? Message us on WhatsApp.'}
+          </p>
+          <a className="wa" href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer">Message us on WhatsApp</a>
+          <a className="link" href="/">Back to the start</a>
+        </div>
+      );
+      break;
+    default:
+      break;
+  }
+
+  const showBar = booking && !done && quote.total > 0 && cur !== 'review';
+  const progress = done ? 100 : screens.length > 1 ? Math.round(((s.i + 1) / screens.length) * 100) : 6;
+  const eta = formatEta(quote.etaOne);
 
   return (
     <div className="app">
-      <Brand />
-
-      <div className="intro">
-        <h1 className="intro__title">
-          Book your <span className="accent">Cleaniqo</span> clean
-        </h1>
-        <p className="intro__sub">
-          Guest-ready homes across London — vetted cleaners, consistent results, every time.
-          Book online in a couple of minutes; we'll confirm your slot by text.
-        </p>
+      <div className="wrap">
+        <div className="top">
+          {s.i > 0 && !done ? <button type="button" className="backb" onClick={back}>‹ Back</button> : <span />}
+          <div className="logo">Clean<span>iqo</span></div>
+          <span />
+        </div>
+        <div className="pbar" role="progressbar" aria-label="Progress" aria-valuenow={progress} aria-valuemin={0} aria-valuemax={100}><span style={{ width: `${progress}%` }} /></div>
+        <h1 ref={h1} tabIndex={-1}>{q}</h1>
+        {sub && <p className="sub">{sub}</p>}
+        {body}
       </div>
-
-      <div className="shell">
-        <div className="card">
-          {postPaymentCancelled && (
-            <div className="error" style={{ borderColor: 'rgba(251, 191, 36, 0.38)', background: 'rgba(251, 191, 36, 0.09)', color: '#fde68a' }}>
-              Payment cancelled — your details are saved. Finish the booking whenever you're ready.
-            </div>
-          )}
-          {error && <div className="error">{error}</div>}
-
-          {/* ── 1. Location ───────────────────────────────────────────────── */}
-          <section className="section">
-            <h3 className="section__title">Location</h3>
-            <div className="note-box">
-              <strong>🇬🇧 London service area only.</strong>{' '}
-              We currently clean across Greater London — enter a London postcode (e.g. SW1A 1AA, E1 6AN, NW1 5LS)
-              and we'll confirm coverage.
-            </div>
-
-            <div className="field">
-              <label className="field__label">
-                Enter London Postcode <span className="req">*</span>
-              </label>
-              <div className="pc-row">
-                <input
-                  className="field__input"
-                  placeholder="E.g. SW1A 1AA"
-                  value={pcLookup.query}
-                  onChange={(e) =>
-                    setPcLookup((s) => ({
-                      ...s,
-                      query: e.target.value.toUpperCase(),
-                      error: '',
-                    }))
-                  }
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault();
-                      runPostcodeLookup();
-                    }
-                  }}
-                  autoComplete="postal-code"
-                />
-                <button
-                  type="button"
-                  className="btn btn--ghost pc-row__btn"
-                  onClick={runPostcodeLookup}
-                  disabled={pcLookup.loading}
-                >
-                  {pcLookup.loading ? 'Looking up…' : 'Find address'}
-                </button>
-              </div>
-              <div className="field__help">Type your London postcode and pick your address from the list.</div>
-              {pcLookup.error && <div className="field__error">{pcLookup.error}</div>}
-              {fieldErrors.postcode && <div className="field__error">{fieldErrors.postcode}</div>}
-            </div>
-
-            {pcLookup.addresses.length > 0 && (
-              <div className="field">
-                <label className="field__label">
-                  Select your address <span className="req">*</span>
-                </label>
-                <select
-                  className="field__select"
-                  value={pcLookup.selectedIdx}
-                  onChange={(e) => handleAddressSelect(e.target.value)}
-                >
-                  <option value="">
-                    {pcLookup.addresses.length} addresses found — choose one…
-                  </option>
-                  {pcLookup.addresses.map((a, i) => (
-                    <option key={i} value={i}>{a.full}</option>
-                  ))}
-                </select>
-              </div>
-            )}
-
-            <div className="field">
-              <label className="field__label">Address <span className="req">*</span></label>
-              <input
-                className="field__input"
-                placeholder="Address will appear here after selection"
-                value={state.address}
-                onChange={(e) => update({ address: e.target.value })}
-                autoComplete="street-address"
-              />
-              {fieldErrors.address && <div className="field__error">{fieldErrors.address}</div>}
-            </div>
-
-            <div className="field">
-              <label className="field__label">Postcode <span className="req">*</span></label>
-              <input
-                className="field__input"
-                placeholder="Postcode will appear here"
-                value={state.postcode}
-                onChange={(e) => update({ postcode: e.target.value.toUpperCase() })}
-                autoComplete="postal-code"
-                readOnly={!!state.postcode && !!pcLookup.addresses.length}
-              />
-              {fieldErrors.postcode && <div className="field__error">{fieldErrors.postcode}</div>}
-            </div>
-          </section>
-
-          {/* ── 2. Service Type ───────────────────────────────────────────── */}
-          <section className="section">
-            <h3 className="section__title">Service type</h3>
-            <div className="field">
-              <label className="field__label">Select service <span className="req">*</span></label>
-              <select
-                className="field__select"
-                value={state.service}
-                onChange={(e) => update({ service: e.target.value, addons: keepOffered(e.target.value, state.addons) })}
-              >
-                <option value="">Select a service…</option>
-                {SERVICES.map((s) => (
-                  <option key={s.key} value={s.key}>
-                    {s.label} — from {money(s.fromPrice)}
-                  </option>
-                ))}
-              </select>
-              {fieldErrors.service && <div className="field__error">{fieldErrors.service}</div>}
-              {selectedService && (
-                <div className="field__help">{selectedService.desc}</div>
-              )}
-            </div>
-
-            <div className="note-box" style={{ marginTop: 18 }}>
-              <strong>Need a weekly, fortnightly or monthly clean?</strong>{' '}
-              Book a one-off below — we'll set up the recurring schedule (and apply your
-              discount) on a quick call afterwards.
-            </div>
-          </section>
-
-          {/* ── 3. Property details ───────────────────────────────────────── */}
-          <section className="section">
-            <h3 className="section__title">Property details</h3>
-            <div className="field-row">
-              <div className="field">
-                <label className="field__label">Type of property <span className="req">*</span></label>
-                <select
-                  className="field__select"
-                  value={state.propertyType}
-                  onChange={(e) => update({ propertyType: e.target.value })}
-                >
-                  <option value="">Select property type…</option>
-                  {PROPERTY_TYPES.map((p) => (
-                    <option key={p.key} value={p.key}>{p.label}</option>
-                  ))}
-                </select>
-                {fieldErrors.propertyType && <div className="field__error">{fieldErrors.propertyType}</div>}
-              </div>
-              <div className="field">
-                <label className="field__label">Extra bathrooms <span className="req">*</span></label>
-                <select
-                  className="field__select"
-                  value={state.extraBathrooms}
-                  onChange={(e) => update({ extraBathrooms: Number(e.target.value) })}
-                >
-                  {BATH_OPTIONS.map((b) => (
-                    <option key={b.v} value={b.v}>{b.label}</option>
-                  ))}
-                </select>
-                <div className="field__help">One bathroom is included with every property type.</div>
-              </div>
-            </div>
-          </section>
-
-          {/* ── 4. Add-ons ───────────────────────────────────────────────── */}
-          <section className="section">
-            <h3 className="section__title">Add-ons <span className="optional">optional</span></h3>
-            <Addons
-              service={state.service}
-              value={state.addons}
-              onChange={(addons) => update({ addons })}
-            />
-            <div className="field" style={{ marginTop: 16 }}>
-              <label className="field__label">Anything else?</label>
-              <textarea
-                className="field__textarea field__textarea--short"
-                placeholder="E.g. ironing, or anything we should know"
-                value={state.extrasNotes}
-                onChange={(e) => update({ extrasNotes: e.target.value })}
-              />
-            </div>
-          </section>
-
-          {/* ── 5. Scheduling ─────────────────────────────────────────────── */}
-          <section className="section">
-            <h3 className="section__title">When would you like us?</h3>
-            <div className="field-row">
-              <div className="field">
-                <label className="field__label">Date <span className="req">*</span></label>
-                <input
-                  type="date"
-                  className="field__input"
-                  min={today}
-                  value={state.bookingDate}
-                  onChange={(e) => update({ bookingDate: e.target.value })}
-                />
-                {fieldErrors.bookingDate && <div className="field__error">{fieldErrors.bookingDate}</div>}
-              </div>
-              <div className="field">
-                <label className="field__label">Start time <span className="req">*</span></label>
-                <select
-                  className="field__select"
-                  value={state.startTime}
-                  onChange={(e) => update({ startTime: e.target.value })}
-                >
-                  <option value="">Select a start time…</option>
-                  {['08:00','09:00','10:00','11:00','12:00','13:00','14:00','15:00','16:00','17:00'].map(t => (
-                    <option key={t} value={t}>{t}</option>
-                  ))}
-                </select>
-                {fieldErrors.startTime && <div className="field__error">{fieldErrors.startTime}</div>}
-              </div>
-            </div>
-          </section>
-
-          {/* ── 6. Customer details ───────────────────────────────────────── */}
-          <section className="section">
-            <h3 className="section__title">Your details</h3>
-            <div className="field-row">
-              <div className="field">
-                <label className="field__label">First name <span className="req">*</span></label>
-                <input
-                  className="field__input"
-                  value={state.firstName}
-                  onChange={(e) => update({ firstName: e.target.value })}
-                  autoComplete="given-name"
-                />
-                {fieldErrors.firstName && <div className="field__error">{fieldErrors.firstName}</div>}
-              </div>
-              <div className="field">
-                <label className="field__label">Last name <span className="req">*</span></label>
-                <input
-                  className="field__input"
-                  value={state.lastName}
-                  onChange={(e) => update({ lastName: e.target.value })}
-                  autoComplete="family-name"
-                />
-                {fieldErrors.lastName && <div className="field__error">{fieldErrors.lastName}</div>}
-              </div>
-            </div>
-            <div className="field-row">
-              <div className="field">
-                <label className="field__label">Email <span className="req">*</span></label>
-                <input
-                  type="email"
-                  className="field__input"
-                  value={state.email}
-                  onChange={(e) => update({ email: e.target.value })}
-                  autoComplete="email"
-                />
-                {fieldErrors.email && <div className="field__error">{fieldErrors.email}</div>}
-              </div>
-              <div className="field">
-                <label className="field__label">Phone <span className="req">*</span></label>
-                <input
-                  type="tel"
-                  className="field__input"
-                  placeholder="07123 456789"
-                  value={state.phone}
-                  onChange={(e) => update({ phone: e.target.value })}
-                  autoComplete="tel-national"
-                  inputMode="tel"
-                />
-                <div className="field__help">Enter your UK number starting with 0 — no +44 needed.</div>
-                {fieldErrors.phone && <div className="field__error">{fieldErrors.phone}</div>}
-              </div>
-            </div>
-          </section>
-
-          {/* ── 7. Key / job notes ────────────────────────────────────────── */}
-          <section className="section">
-            <h3 className="section__title">Key information & access</h3>
-            <div className="field">
-              <label className="field__label">How will our cleaner get in?</label>
-              <textarea
-                className="field__textarea"
-                placeholder="E.g. meet me there, key in a lockbox (code 1234), concierge has a spare key, leave on doormat…"
-                value={state.accessNotes}
-                onChange={(e) => update({ accessNotes: e.target.value })}
-              />
-            </div>
-            <div className="field">
-              <label className="field__label">Special notes for your cleaner</label>
-              <textarea
-                className="field__textarea"
-                placeholder="Anything they should know — pets, fragile items, areas to focus on or skip."
-                value={state.specialInstructions}
-                onChange={(e) => update({ specialInstructions: e.target.value })}
-              />
-            </div>
-          </section>
-
-          {/* ── 8. Payment ────────────────────────────────────────────────── */}
-          <section className="section">
-            <h3 className="section__title">Payment</h3>
-            <div className="note-box">
-              <strong>Debit or credit card only — you won't be charged until after the clean.</strong>{' '}
-              When you confirm, Stripe places a pending authorisation on your card for the full
-              amount. The money stays in your account and the charge only settles once the clean
-              is complete. Cancel free of charge up to 24 hours before your slot. Cleaniqo never
-              sees your card number.
-            </div>
-
-            <div className="terms">
-              <input
-                type="checkbox"
-                id="terms"
-                checked={state.termsAccepted}
-                onChange={(e) => update({ termsAccepted: e.target.checked })}
-              />
-              <label htmlFor="terms">
-                I affirm that I have read and agree to the{' '}
-                <a href="https://cleaniqo.co.uk/terms" target="_top" rel="noreferrer">Terms of Service</a>{' '}
-                and{' '}
-                <a href="https://cleaniqo.co.uk/privacy" target="_top" rel="noreferrer">Privacy Policy</a>.
-                I agree that Cleaniqo may contact me using the details above — including by SMS,
-                email, phone call and <strong>WhatsApp</strong> — to deliver booking confirmations,
-                cleaner arrival updates, scheduling changes and other service-related
-                communications necessary to fulfil my booking. These operational messages are sent
-                under Article 6(1)(b) UK GDPR (contract performance) and are not marketing. I can
-                ask to change channel at any time by emailing{' '}
-                <a href="mailto:privacy@cleaniqo.co.uk" target="_top" rel="noreferrer">privacy@cleaniqo.co.uk</a>.
-              </label>
-            </div>
-            {fieldErrors.terms && <div className="field__error">{fieldErrors.terms}</div>}
-          </section>
-
-          <div className="submit-row">
-            <button
-              className="btn btn--primary btn--lg"
-              onClick={handleSubmit}
-              disabled={submitting}
-            >
-              {submitting ? 'Redirecting to Stripe…' : `Confirm booking · ${money(quote.total || 0)}`}
-            </button>
+      {showBar && (
+        <div className="bar">
+          <div className="barin">
+            <b>{money(quote.total)}</b>
+            <span>{eta ? `About ${eta} · ` : ''}pay after the clean</span>
           </div>
         </div>
-
-        <Sidebar state={state} service={selectedService} propertyLabel={propertyLabel} quote={quote} />
-      </div>
+      )}
     </div>
-  );
-}
-
-function Brand() {
-  return (
-    <div className="brand">
-      <div className="brand__logo">Cleaniqo</div>
-      <div className="brand__badge">Secure booking · Pay after clean · Free cancellation up to 24h</div>
-    </div>
-  );
-}
-
-function Sidebar({ state, service, propertyLabel, quote }) {
-  return (
-    <aside className="summary">
-      <h3 className="summary__title">Booking Summary</h3>
-      <div className="summary__body">
-        <div className="summary__group">
-          <div className="summary__heading">Service Details</div>
-          <div className="summary__row">
-            <span>Service type:</span>
-            <span>{service ? service.short : 'Not selected'}</span>
-          </div>
-          <div className="summary__row">
-            <span>Property type:</span>
-            <span>{propertyLabel}</span>
-          </div>
-          <div className="summary__row">
-            <span>Extra bathrooms:</span>
-            <span>
-              {Number(state.extraBathrooms || 0) === 0
-                ? 'None (standard included)'
-                : `${state.extraBathrooms} extra`}
-            </span>
-          </div>
-          {quote.extrasLines.map((l) => (
-            <div className="summary__row" key={l.key}>
-              <span>{l.label}</span>
-              <span>{money(l.amount)}</span>
-            </div>
-          ))}
-          {state.bookingDate && state.startTime && (
-            <div className="summary__row">
-              <span>Schedule:</span>
-              <span>{state.bookingDate} · {state.startTime}</span>
-            </div>
-          )}
-        </div>
-
-        <div className="summary__group">
-          <div className="summary__heading">Estimated Time</div>
-          <div className="summary__row">
-            <span>1 cleaner:</span>
-            <span>{formatEta(quote.etaOne) || '—'}</span>
-          </div>
-          {quote.etaTwo && (
-            <div className="summary__row">
-              <span>2 cleaners:</span>
-              <span>{formatEta(quote.etaTwo)}</span>
-            </div>
-          )}
-        </div>
-
-        <div className="summary__total">
-          <span>Total Cost:</span>
-          <span>{money(quote.total || 0)}</span>
-        </div>
-
-        <p className="summary__note">
-          <strong>Note:</strong> Final price may vary based on property condition and specific
-          requirements. When you confirm, Stripe places a pending authorisation on your card — the
-          charge only settles once your clean is complete.
-        </p>
-      </div>
-    </aside>
-  );
-}
-
-// Keep only the add-ons the new service offers.
-function keepOffered(service, addons) {
-  const keys = new Set(addonsFor(service).flatMap((t) => t.options.map((o) => o.key)));
-  return Object.fromEntries(Object.entries(addons || {}).filter(([k]) => keys.has(k)));
-}
-
-// One tile per add-on. Tick it on; if it has options, they appear underneath.
-function Addons({ service, value, onChange }) {
-  if (!service) {
-    return <div className="field__help">Choose a service above to see the add-ons.</div>;
-  }
-  const tiles = addonsFor(service);
-  const set = (patch) => {
-    const next = { ...value, ...patch };
-    Object.keys(next).forEach((k) => { if (!next[k]) delete next[k]; });
-    onChange(next);
-  };
-  const isOn = (t) => t.options.some((o) => value[o.key] > 0);
-  const toggle = (t) => {
-    if (isOn(t)) set(Object.fromEntries(t.options.map((o) => [o.key, 0])));
-    else set({ [t.options[t.options.length > 1 && t.pick === 'count' ? t.options.length - 1 : 0].key]: 1 });
-  };
-  const from = (t) => Math.min(...t.options.map((o) => o.price));
-  const unit = (t) => (t.pick === 'count' && t.options.length === 1 ? ` / ${t.options[0].label.replace(/s$/, '').toLowerCase()}` : '');
-
-  return (
-    <>
-      <div className="extras">
-        {tiles.map((t) => {
-          const on = isOn(t);
-          return (
-            <div key={t.id} className={`extra${on ? ' extra--checked' : ''}${on && (t.pick || t.help) ? ' extra--open' : ''}`}>
-              <label className="extra__head">
-                <input type="checkbox" checked={on} onChange={() => toggle(t)} />
-                <span>{t.label}</span>
-                <span className="extra__price">{t.options.length > 1 ? 'from ' : ''}{money(from(t))}{unit(t)}</span>
-              </label>
-              {on && t.pick === 'one' && (
-                <div className="extra__choices">
-                  {t.options.map((o) => (
-                    <button
-                      type="button"
-                      key={o.key}
-                      className={`chip${value[o.key] > 0 ? ' chip--on' : ''}`}
-                      onClick={() => set(Object.fromEntries(t.options.map((x) => [x.key, x.key === o.key ? 1 : 0])))}
-                    >
-                      {o.label} · {money(o.price)}
-                    </button>
-                  ))}
-                </div>
-              )}
-              {on && t.pick === 'count' && (
-                <div className="extra__counts">
-                  {t.options.map((o) => (
-                    <div className="count" key={o.key}>
-                      <span>{t.options.length > 1 ? `${o.label} · ${money(o.price)}` : o.label}</span>
-                      <span className="count__ctl">
-                        <button type="button" aria-label={`Fewer ${o.label}`} onClick={() => set({ [o.key]: Math.max((value[o.key] || 0) - 1, 0) })}>−</button>
-                        <span className="count__n">{value[o.key] || 0}</span>
-                        <button type="button" aria-label={`More ${o.label}`} onClick={() => set({ [o.key]: Math.min((value[o.key] || 0) + 1, 20) })}>+</button>
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              )}
-              {on && t.help && <div className="extra__help">{t.help}</div>}
-            </div>
-          );
-        })}
-      </div>
-      {INCLUDED_NOTE[service] && <div className="field__help" style={{ marginTop: 10 }}>{INCLUDED_NOTE[service]}</div>}
-    </>
   );
 }

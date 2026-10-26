@@ -25,6 +25,13 @@ export const SERVICES = [
     fromPrice: 120,
     desc: 'Deposit-back standard, agent approved',
   },
+  {
+    key: 'specialist',
+    label: 'Specialist Clean',
+    short: 'Specialist Clean',
+    fromPrice: 25,
+    desc: 'Carpets, sofas, ovens, windows and more, booked on their own',
+  },
 ];
 
 // Property types offered by the form. `sizeKey` indexes the price/time tables below.
@@ -158,13 +165,15 @@ export const EXTRA_BATH_TIME = {
 // Each tile is ticked on; `pick: 'one'` shows a choice, `pick: 'count'` shows
 // quantities, a tile with no `pick` is just on or off.
 const ALL = ['regular', 'deep', 'end_of_tenancy'];
+// Specialist cleans on their own (owner, 26 Oct 2026): the same add-ons at the same prices, no home clean.
+const SPEC = 'specialist';
 
 export const ADDONS = [
-  { id: 'oven', label: 'Inside oven', services: ['regular', 'deep'],
+  { id: 'oven', label: 'Inside oven', services: ['regular', 'deep', SPEC],
     options: [{ key: 'oven', label: 'Inside oven', price: 75, minutes: 60 }] },
-  { id: 'fridge', label: 'Inside fridge', services: ['regular', 'deep'],
+  { id: 'fridge', label: 'Inside fridge', services: ['regular', 'deep', SPEC],
     options: [{ key: 'fridge', label: 'Inside fridge', price: 30, minutes: 30 }] },
-  { id: 'upholstery', label: 'Sofa & armchair steam', services: ALL, pick: 'count',
+  { id: 'upholstery', label: 'Sofa & armchair steam', services: [...ALL, SPEC], pick: 'count',
     minCharge: 60, setupMinutes: 15,
     help: 'Not for leather, silk or velvet. £60 minimum. We’ll ask for a photo of the care label.',
     options: [
@@ -172,15 +181,15 @@ export const ADDONS = [
       { key: 'uph_2seat', label: '2-seater', price: 40, minutes: 30 },
       { key: 'uph_3seat', label: '3-seater', price: 60, minutes: 45 },
     ] },
-  { id: 'carpet', label: 'Carpet clean', services: ALL, pick: 'count',
+  { id: 'carpet', label: 'Carpet clean', services: [...ALL, SPEC], pick: 'count',
     options: [{ key: 'carpet', label: 'Rooms', price: 60, minutes: 45 }] },
-  { id: 'curtains', label: 'Curtain steam', services: ['deep', 'end_of_tenancy'], pick: 'count',
+  { id: 'curtains', label: 'Curtain steam', services: ['deep', 'end_of_tenancy', SPEC], pick: 'count',
     help: 'A refresh where they hang, not stain removal. Full length = over 1.5 m drop.',
     options: [
       { key: 'curtain_half', label: 'Half-length pair', price: 30, minutes: 20 },
       { key: 'curtain_full', label: 'Full-length pair', price: 40, minutes: 30 },
     ] },
-  { id: 'windows', label: 'Outside windows', services: ALL, pick: 'one',
+  { id: 'windows', label: 'Outside windows', services: [...ALL, SPEC], pick: 'one',
     help: 'Ground floor, reachable from the ground. More windows? £3 each, added on the day.',
     options: [
       { key: 'windows_flat', label: 'Flat, up to 6', price: 25, minutes: 30 },
@@ -259,6 +268,12 @@ export function computeQuote(state) {
     etaOne: null, etaTwo: null,
   };
   const { service, propertyType, extraBathrooms = 0, addons = {} } = state;
+  // Specialist on its own: only the add-ons, plus 15 minutes to set up. No home size or bathrooms.
+  if (service === 'specialist') {
+    const add = priceAddons(service, addons);
+    const h = 0.25 + add.minutes / 60;
+    return { ...empty, extras: add.total, extrasLines: add.lines, subtotal: add.total, total: add.total, etaOne: add.lines.length ? [h, h] : null };
+  }
   if (!service || !propertyType) return empty;
 
   const pt = PROPERTY_TYPES.find((p) => p.key === propertyType);

@@ -13,8 +13,9 @@ async function post(path, body) {
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
-    const msg = data?.error || data?.message || `Request failed (${res.status})`;
-    throw new Error(msg);
+    const err = new Error(data?.error || data?.message || `Request failed (${res.status})`);
+    err.status = res.status;
+    throw err;
   }
   return data;
 }
@@ -29,9 +30,21 @@ async function get(path) {
   return data;
 }
 
+// One customer photo: ask for an upload slot, send the file straight to storage, then let the server check it.
+async function uploadPhoto(leadId, token, file) {
+  const slot = await post('/api/public/quote/photo-upload', { leadId, token, mimeType: file.type, sizeBytes: file.size });
+  const put = await fetch(slot.uploadUrl, { method: 'PUT', headers: { 'Content-Type': file.type }, body: file });
+  if (!put.ok) throw new Error('Upload failed');
+  return post('/api/public/quote/photo-done', { leadId, token, photoId: slot.photoId });
+}
+
 export const api = {
   createLead: (payload) => post('/api/public/quote/lead', payload),
   createCheckout: (payload) => post('/api/public/quote/checkout-session', payload),
+  callback: (payload) => post('/api/public/callback', payload),
+  uploadPhoto,
   lookupAddresses: (postcode) =>
     get(`/api/public/address-lookup?postcode=${encodeURIComponent(postcode)}`),
 };
+
+export const WHATSAPP_URL = 'https://wa.me/447348472250';
