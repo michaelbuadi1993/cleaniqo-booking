@@ -16,8 +16,7 @@ a { color: var(--accent); }
 .app { min-height: 100vh; display: flex; flex-direction: column; }
 .wrap { flex: 1; max-width: 600px; margin: 0 auto; padding: 0 16px 32px; width: 100%; }
 .top { display: grid; grid-template-columns: 80px minmax(0, 1fr) 80px; align-items: center; padding: 16px 0 6px; }
-.logo { font-size: 20px; font-weight: 700; color: #fff; text-align: center; }
-.logo span { color: var(--accent); }
+.logo { display: block; height: 26px; width: auto; justify-self: center; user-select: none; }
 .backb { justify-self: start; background: none; border: 0; color: var(--muted); font-weight: 600; font-size: 15px; min-height: 44px; padding: 0; }
 .pbar { height: 5px; border-radius: 99px; background: var(--line); margin: 8px auto 26px; max-width: 240px; overflow: hidden; }
 .pbar span { display: block; height: 100%; background: var(--accent); border-radius: 99px; transition: width .25s ease; }

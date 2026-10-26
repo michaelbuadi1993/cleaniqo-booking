@@ -623,7 +623,7 @@ export default function App() {
       <div className="wrap">
         <div className="top">
           {s.i > 0 && !done ? <button type="button" className="backb" onClick={back}>‹ Back</button> : <span />}
-          <div className="logo">Clean<span>iqo</span></div>
+          <img className="logo" src="/cleaniqo-logo.png" alt="Cleaniqo" />
           <span />
         </div>
         <div className="pbar" role="progressbar" aria-label="Progress" aria-valuenow={progress} aria-valuemin={0} aria-valuemax={100}><span style={{ width: `${progress}%` }} /></div>
