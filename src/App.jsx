@@ -324,6 +324,9 @@ export default function App() {
   const [codeIn, setCodeIn] = useState('');
   const [codeErr, setCodeErr] = useState('');
   const [codeBusy, setCodeBusy] = useState(false);
+  const [codeOpen, setCodeOpen] = useState(false);   // one-page booking: "Have a discount code?" opens the box
+  const [linesOpen, setLinesOpen] = useState(false); // one-page booking: "See what's included"
+  const [nudge, setNudge] = useState('');            // one-page booking: the field Book took them to
   const choices = () => ({ service, ...(service === 'specialist' ? {} : { propertyType: s.size, extraBathrooms: Math.min(Math.max(s.baths - 1, 0), 4) }),
     extras: quote.extrasLines.filter((l) => !l.key.endsWith('_minimum')).map((l) => ({ key: l.key, qty: l.qty })) });
   const applyCode = async () => {
@@ -378,7 +381,7 @@ export default function App() {
   );
   const termsBox = (
     <label className="tk">
-      <input type="checkbox" checked={s.terms} onChange={(e) => setS((x) => ({ ...x, terms: e.target.checked }))} />
+      <input id="terms" type="checkbox" checked={s.terms} onChange={(e) => setS((x) => ({ ...x, terms: e.target.checked }))} />
       <span>
         I agree to the <a href="https://cleaniqo.co.uk/terms" target="_top" rel="noreferrer">Terms</a> and{' '}
         <a href="https://cleaniqo.co.uk/privacy" target="_top" rel="noreferrer">Privacy Policy</a>, and to Cleaniqo contacting me about this booking by text, email, phone or WhatsApp.
@@ -738,70 +741,84 @@ export default function App() {
       break;
     case 'linkpage': {
       // One page (owner, 26 Oct 2026: "it shouldn't be too many pages i think it should be one, that also has a section
-      // for discount codes too"): the clean as chosen with our team, then the few things only they can give, and pay.
-      q = 'Your booking'; sub = 'We’ve filled this in from your chat with us. Check it, add your details and book.';
+      // for discount codes too"), kept to about one phone screen: a compact summary of what was agreed, their details,
+      // and Book always on screen. Book with something missing takes them to it.
+      q = 'Your booking'; sub = 'Filled in from your chat with us. Just add your details and book.';
       const whenOk = !!s.day && !!s.time;
       const whereOk = s.addrSet && pc.ok && s.address.trim().length >= 4;
-      const ready = whenOk && whereOk && detailsOk && s.terms;
-      const missing = [!whenOk && 'a day and time', !whereOk && 'your address', !detailsOk && 'your details', !s.terms && 'the tick box'].filter(Boolean);
-      const info = [
-        ['Getting in', s.access === 'home' ? ACCESS.home : `${ACCESS[s.access]}${s.accessNote ? `: ${s.accessNote}` : ''}`],
-        ...(s.pref && s.pref !== 'any' ? [['Cleaner', PREF[s.pref]]] : []),
-        ...(s.pets.none || petText(s.pets) ? [['Pets', s.pets.none ? 'None' : petText(s.pets).replace(/^./, (c) => c.toUpperCase())]] : []),
-      ];
+      const needs = [
+        [!whenOk, 'lp-day'], [!whereOk, 'pc'], [!s.firstName.trim(), 'lp-first'], [!s.lastName.trim(), 'lp-last'],
+        [!phoneOk, 'lp-mobile'], [!emailOk, 'lp-email'], [!s.terms, 'terms'],
+      ].filter(([miss]) => miss).map(([, id]) => id);
+      const ready = needs.length === 0;
+      const tapBook = () => {
+        if (ready) { book(); return; }
+        const id = needs[0];
+        const el = document.getElementById(id);
+        if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); el.focus({ preventScroll: true }); }
+        setNudge(id); setTimeout(() => setNudge(''), 2200);
+      };
+      const n = (id) => (nudge === id ? ' need' : '');
+      const what = [service !== 'specialist' ? `${KIND_NAME[service]}, ${(SIZE_SHORT[s.size] || '').toLowerCase()}` : '',
+        quote.bathSurcharge ? `${Math.min(s.baths - 1, 4)} extra bathroom${s.baths > 2 ? 's' : ''}` : '',
+        ...quote.extrasLines.filter((l) => !l.key.endsWith('_minimum')).map((l) => l.label.toLowerCase())].filter(Boolean).join(' + ');
+      const getIn = s.access === 'home' ? ACCESS.home : `${ACCESS[s.access]}${s.accessNote ? `: ${s.accessNote}` : ''}`;
+      const pets = s.pets.none ? '' : petText(s.pets);
       body = (
         <>
-          <section className="sec" aria-labelledby="sec-clean">
-            <h2 id="sec-clean">Your clean</h2>
-            {sumBox}
-            {bigJob && <div className="msg msg--info">For a bigger job like this, we may send a team of cleaners so it’s finished sooner. The price stays the same.</div>}
-            <dl className="sum sum--info">{info.map(([k, v]) => <div key={k}><dt>{k}</dt><dd>{v}</dd></div>)}</dl>
-            <p className="note">Want to change the clean itself? <a className="wa-link" href={`${WHATSAPP_URL}?text=${encodeURIComponent('Hi, I’d like to change the booking you sent me.')}`} target="_blank" rel="noopener noreferrer">Message us on WhatsApp</a></p>
-          </section>
+          <div className="lcard" aria-label="Your clean">
+            <div className="lrow lrow--what">
+              <span className="lrow__main"><b>{what.replace(/^./, (c) => c.toUpperCase())}</b>
+                <span className="lrow__sub">{getIn}{pets ? ` · ${pets.replace(/^./, (c) => c.toUpperCase())}` : ''}</span></span>
+              <b className="lrow__amt">{money(total)}</b>
+            </div>
+            <button type="button" className="lmore" aria-expanded={linesOpen} onClick={() => setLinesOpen((o) => !o)}>{linesOpen ? 'Hide the price breakdown' : 'See the price breakdown'}</button>
+            {linesOpen && <>{sumBox}{bigJob && <p className="lrow__sub lrow__team">A bigger job: we may send a team so it’s finished sooner, at the same price.</p>}</>}
 
-          <section className="sec" aria-labelledby="sec-when">
-            <h2 id="sec-when">When</h2>
-            {s.linkExpired && <div className="msg msg--amber" role="status">This link has run out, so please choose a new day and time.</div>}
             {whenOk && !s.linkExpired ? (
-              <div className="pick"><span>{dayName(s.day, { weekday: 'long', day: 'numeric', month: 'long' })}, {s.time}</span>
+              <div className="lrow"><span className="lrow__k">When</span><span className="lrow__main">{dayName(s.day, { weekday: 'short', day: 'numeric', month: 'short' })}, {s.time}</span>
                 <button type="button" className="pick__ch" onClick={() => set({ linkExpired: true })}>Change</button></div>
             ) : (
-              <div className="row2">
-                <label className="lbl">Day<input type="date" className="inp" min={days[0]} max={londonDays(1, 120).pop()} value={s.day} onChange={(e) => set({ day: e.target.value })} /></label>
-                <label className="lbl">Start time<select className="inp" value={s.time} onChange={(e) => set({ time: e.target.value })}>
-                  <option value="">Choose</option>{TIMES.map((t) => <option key={t} value={t}>{t}</option>)}</select></label>
+              <div className="lrow lrow--open">
+                {s.linkExpired && !whenOk && <div className="msg msg--amber" role="status">This link has run out, so please choose a new day and time.</div>}
+                <div className="row2">
+                  <label className="lbl">Day<input id="lp-day" type="date" className={`inp${n('lp-day')}`} min={days[0]} max={londonDays(1, 120).pop()} value={s.day} onChange={(e) => set({ day: e.target.value })} /></label>
+                  <label className="lbl">Start time<select className="inp" value={s.time} onChange={(e) => set({ time: e.target.value })}>
+                    <option value="">Choose</option>{TIMES.map((t) => <option key={t} value={t}>{t}</option>)}</select></label>
+                </div>
               </div>
             )}
-          </section>
 
-          <section className="sec" aria-labelledby="sec-where">
-            <h2 id="sec-where">Where</h2>
             {s.addrSet ? (
-              <div className="pick"><span>{s.address}, {pc.value}</span>
+              <div className="lrow"><span className="lrow__k">Where</span><span className="lrow__main">{s.address}, {pc.value}</span>
                 <button type="button" className="pick__ch" onClick={() => { set({ addrSet: false }); setAddr({ loading: false, error: '', list: [], manual: false }); }}>Change</button></div>
-            ) : addressPicker}
-          </section>
+            ) : (
+              <div className={`lrow lrow--open${n('pc')}`}>{addressPicker}</div>
+            )}
+          </div>
 
           <section className="sec" aria-labelledby="sec-you">
             <h2 id="sec-you">Your details</h2>
             <div className="row2">
-              <label className="lbl">First name<input className="inp" value={s.firstName} autoComplete="given-name" onChange={(e) => set({ firstName: e.target.value })} /></label>
-              <label className="lbl">Last name<input className="inp" value={s.lastName} autoComplete="family-name" onChange={(e) => set({ lastName: e.target.value })} /></label>
+              <label className="lbl">First name<input id="lp-first" className={`inp${n('lp-first')}`} value={s.firstName} autoComplete="given-name" onChange={(e) => set({ firstName: e.target.value })} /></label>
+              <label className="lbl">Last name<input id="lp-last" className={`inp${n('lp-last')}`} value={s.lastName} autoComplete="family-name" onChange={(e) => set({ lastName: e.target.value })} /></label>
             </div>
-            <label className="lbl">Mobile<input className="inp" type="tel" inputMode="tel" value={s.phone} placeholder="07123 456789" autoComplete="tel-national" onChange={(e) => set({ phone: e.target.value })} /></label>
+            <label className="lbl">Mobile<input id="lp-mobile" className={`inp${n('lp-mobile')}`} type="tel" inputMode="tel" value={s.phone} placeholder="07123 456789" autoComplete="tel-national" onChange={(e) => set({ phone: e.target.value })} /></label>
             {s.phone.replace(/\s/g, '').length >= 11 && !phoneOk && <div className="err">{validateUkPhone(s.phone).error}</div>}
-            <label className="lbl">Email<input className="inp" type="email" value={s.email} autoComplete="email" onChange={(e) => set({ email: e.target.value })} /></label>
+            <label className="lbl">Email<input id="lp-email" className={`inp${n('lp-email')}`} type="email" value={s.email} autoComplete="email" onChange={(e) => set({ email: e.target.value })} /></label>
           </section>
 
-          <div className="sec">{codeBox}</div>
+          {s.disc || codeOpen ? codeBox : <button type="button" className="lmore lmore--code" onClick={() => setCodeOpen(true)}>Have a discount code?</button>}
 
-          <div className="sec sec--pay">
-            <div className="paytotal"><span>Total</span><b>{money(total)}</b></div>
-            {termsBox}
-            {error && <div className="msg msg--red" role="alert">{error}</div>}
-            <button type="button" className="btn" disabled={!ready || !!busy} onClick={book}>{busy || `Book · ${money(total)}`}</button>
-            {!ready && !busy && <p className="note">Still needed: {missing.join(', ')}.</p>}
-            <p className="note">Your card is held, not charged. You pay once the clean is done. Free to cancel up to 24 hours before.</p>
+          <div className={`lterms${n('terms')}`}>{termsBox}</div>
+          {error && <div className="msg msg--red" role="alert">{error}</div>}
+          <p className="note">Your card is held, not charged. You pay once the clean is done. Free to cancel up to 24 hours before. <a className="wa-link" href={`${WHATSAPP_URL}?text=${encodeURIComponent('Hi, I’d like to change the booking you sent me.')}`} target="_blank" rel="noopener noreferrer">Change something on WhatsApp</a></p>
+
+          <div className="paybar">
+            <div className="paybar__in">
+              <span className="paybar__t"><b>{money(total)}</b><span>{discAmount > 0 ? `${s.disc.code} applied` : 'Pay after the clean'}</span></span>
+              <button type="button" className={`paybar__btn${ready ? '' : ' paybar__btn--wait'}`} disabled={!!busy} onClick={tapBook}>{busy || 'Book'}</button>
+            </div>
           </div>
         </>
       );
@@ -851,7 +868,7 @@ export default function App() {
 
   return (
     <div className="app">
-      <div className="wrap">
+      <div className={`wrap${cur === 'linkpage' ? ' wrap--paybar' : ''}`}>
         <div className="top">
           {s.i > 0 && !done && !s.link ? <button type="button" className="backb" onClick={back}>‹ Back</button> : <span />}
           <img className="logo" src="/cleaniqo-logo.png" alt="Cleaniqo" />

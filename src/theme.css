@@ -150,3 +150,37 @@ h1 + .msg { margin: 0 0 14px; }
 .code__on { display: flex; align-items: center; gap: 12px; padding: 10px 16px; border-radius: 14px; background: rgba(0, 255, 136, .08); border: 1px solid rgba(0, 255, 136, .35); color: #fff; font-size: 15px; }
 .code__on > span:first-child { flex: 1; min-width: 0; }
 .code__amt { font-weight: 700; color: var(--accent); }
+
+/* One-page booking, compact (owner, 26 Oct 2026: about one phone screen, Book always on screen) */
+.wrap--paybar { padding-bottom: 110px; }
+.wrap--paybar .sub { margin-bottom: 16px; }
+.lcard { border-radius: 16px; background: var(--card); padding: 4px 16px; }
+.lrow { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-top: 1px solid var(--line); font-size: 15px; color: #fff; line-height: 1.4; }
+.lrow:first-child { border-top: 0; }
+.lrow--what { align-items: flex-start; padding-top: 14px; }
+.lrow--open { display: block; padding-bottom: 16px; }
+.lrow--open .lbl:first-child, .lrow--open .row2 .lbl { margin-top: 4px; }
+.lrow__k { flex: 0 0 52px; color: var(--muted); font-size: 14px; }
+.lrow__main { flex: 1; min-width: 0; overflow-wrap: anywhere; display: flex; flex-direction: column; gap: 2px; }
+.lrow__sub { color: var(--muted); font-size: 13px; }
+.lrow__team { margin: 0 0 10px; }
+.lrow__amt { font-size: 20px; flex-shrink: 0; }
+.lmore { display: inline-block; background: none; border: 0; padding: 0 0 10px; min-height: 32px; color: var(--teal); font-weight: 600; font-size: 14px; }
+.lcard .sum { margin: 0 0 12px; background: rgba(255, 255, 255, .03); }
+.lmore--code { display: block; margin: 14px 0 0; padding: 0; min-height: 44px; font-size: 15px; }
+.wrap--paybar .sec { margin-top: 22px; }
+.lterms { border-radius: 12px; }
+.need, .lterms.need, .lrow--open.need { outline: 2px solid var(--amber, #fbbf24); outline-offset: 3px; border-radius: 12px; animation: needpulse .5s ease 2; }
+@keyframes needpulse { 50% { outline-color: transparent; } }
+.paybar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; background: rgba(10, 22, 40, .96); border-top: 1px solid var(--line); backdrop-filter: blur(8px);
+  padding: 12px 16px calc(12px + env(safe-area-inset-bottom)); }
+.paybar__in { max-width: 600px; margin: 0 auto; display: flex; align-items: center; gap: 14px; }
+.paybar__t { flex: 1; display: flex; flex-direction: column; line-height: 1.25; }
+.paybar__t b { font-size: 22px; color: #fff; }
+.paybar__t span { font-size: 13px; color: var(--muted); }
+.paybar__btn { flex: 0 0 auto; min-width: 150px; min-height: 52px; border-radius: 14px; border: 0; background: var(--accent); color: var(--accent-ink); font-weight: 700; font-size: 17px; }
+.paybar__btn--wait { opacity: .55; }
+.wrap--paybar .inp { min-height: 48px; padding: 9px 14px; font-size: 17px; }
+.wrap--paybar .lbl { margin-top: 10px; }
+.wrap--paybar .sec h2 { margin-bottom: 0; }
+.lcard .sum + .lrow__team { margin-top: -4px; }
