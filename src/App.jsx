@@ -54,6 +54,8 @@ const ICONS = {
   camera: 'M4 7h3l2-3h6l2 3h3v13H4zM12 17a4 4 0 1 0 0-8 4 4 0 0 0 0 8z',
   arrow: 'M5 12h14M13 6l6 6-6 6',
   calendar: 'M4 5h16v16H4zM4 10h16M8 3v4M16 3v4',
+  paw: 'M7 9.5a1.5 2 0 1 0 3 0 1.5 2 0 1 0-3 0zM14 9.5a1.5 2 0 1 0 3 0 1.5 2 0 1 0-3 0zM4 13.5a1.5 1.8 0 1 0 3 0 1.5 1.8 0 1 0-3 0zM17 13.5a1.5 1.8 0 1 0 3 0 1.5 1.8 0 1 0-3 0zM8 19c0-2.5 1.8-4.5 4-4.5s4 2 4 4.5c0 1.2-1 1.5-2 1.5h-4c-1 0-2-.3-2-1.5z',
+  none: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM5.6 5.6l12.8 12.8',
 };
 const TILE_ICON = { oven: 'oven', fridge: 'fridge', upholstery: 'sofa', carpet: 'carpet', curtains: 'curtain', windows: 'window', outdoor: 'leaf', stairs: 'stairs', garage: 'garage', eco: 'eco' };
 const TILE_SHORT = { upholstery: 'Sofa & armchairs', carpet: 'Carpets', curtains: 'Curtains', windows: 'Outside windows', outdoor: 'Balcony or garden', garage: 'Garage', eco: 'Eco products', stairs: 'Stairs', oven: 'Oven', fridge: 'Fridge' };
@@ -63,6 +65,8 @@ const ACCESS = { home: 'I’ll be in', keysafe: 'Key safe', concierge: 'Concierg
 const NOTE_Q = { keysafe: 'Where’s the key safe?', concierge: 'Who has the key?', other: 'How do we get in?' };
 const NOTE_PH = { keysafe: 'Where it is, and the code', concierge: 'Name or flat number', other: 'Tell us how' };
 const PREF = { any: 'Don’t mind', female: 'Female', male: 'Male' };
+const PETS = { none: 'No pets', dog: 'Dog', cat: 'Cat', other: 'Other pets' };
+const petText = (p) => ['dog', 'cat', 'other'].filter((k) => p[k]).map((k) => PETS[k].toLowerCase()).join(', ');
 const TIMES = ['08:00', '09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00'];
 const PHOTO_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'];
 const MAX_PHOTOS = 6;
@@ -70,7 +74,7 @@ const SAVED = 'cleaniqo:booking';
 
 const INITIAL = {
   path: '', i: 0, service: '', size: '', baths: 0, on: {}, addons: {}, day: '', time: '', postcode: '', address: '', borough: '',
-  access: '', accessNote: '', pref: '', firstName: '', lastName: '', name: '', phone: '', email: '', terms: false,
+  access: '', accessNote: '', pref: '', pets: {}, firstName: '', lastName: '', name: '', phone: '', email: '', terms: false,
   leadId: null, token: null, photosSent: 0,
 };
 
@@ -149,9 +153,12 @@ export default function App() {
   const needsQty = onTiles.some((t) => t.pick);
   const quote = useMemo(() => computeQuote({ service, propertyType: s.size, extraBathrooms: Math.min(Math.max(s.baths - 1, 0), 4), addons: s.addons }), [service, s.size, s.baths, s.addons]);
 
+  // Over about 4 hours for one cleaner, we may send a team (owner, 26 Oct 2026: "for specific jobs we may send a team").
+  const bigJob = !!quote.etaOne && quote.etaOne[1] > 4;
+
   const screens = useMemo(() => {
     if (done) return ['done'];
-    const end = ['day', 'time', 'postcode', 'access', ...(s.access && s.access !== 'home' ? ['note'] : []), 'pref', 'photos', 'details', 'review'];
+    const end = ['day', 'time', 'postcode', 'access', ...(s.access && s.access !== 'home' ? ['note'] : []), 'pref', 'pets', 'photos', 'details', 'review'];
     if (s.path === 'home') return ['start', 'kind', 'size', 'baths', 'extras', ...(needsQty ? ['qty'] : []), ...end];
     if (s.path === 'spec') return ['start', 'spec', ...(needsQty ? ['qty'] : []), ...end];
     if (s.path === 'regular' || s.path === 'turnover') return ['start', 'callback'];
@@ -237,6 +244,7 @@ export default function App() {
   const instructions = () => [
     s.access ? `Access: ${ACCESS[s.access]}${s.accessNote.trim() && s.access !== 'home' ? ` — ${s.accessNote.trim()}` : ''}` : '',
     s.pref && s.pref !== 'any' ? `Cleaner preference: ${s.pref}` : '',
+    s.pets.none ? 'Pets: none' : petText(s.pets) ? `Pets: ${petText(s.pets)}` : '',
   ].filter(Boolean).join('\n') || null;
 
   const book = async () => {
@@ -467,17 +475,30 @@ export default function App() {
         </div>
       );
       break;
+    case 'pets': {
+      q = 'Any pets at home?'; sub = 'So your cleaner knows before they arrive';
+      const tap = (k) => set({ pets: k === 'none' ? (s.pets.none ? {} : { none: true }) : { ...s.pets, none: false, [k]: !s.pets[k] } });
+      body = (
+        <>
+          <div className="g2" role="group" aria-label={q}>
+            {[['none', 'none'], ['dog', 'paw'], ['cat', 'paw'], ['other', 'paw']].map(([k, ic]) => <Tile key={k} multi icon={ic} label={PETS[k]} on={!!s.pets[k]} onClick={() => tap(k)} />)}
+          </div>
+          <button type="button" className="btn" disabled={!s.pets.none && !petText(s.pets)} onClick={() => go()}>Continue</button>
+        </>
+      );
+      break;
+    }
     case 'photos':
-      q = 'Want us to check for niggly bits?'; sub = 'A few photos help us arrive with the right kit and time. Our team looks at them; only we see them.';
+      q = 'Anything that needs special care?'; sub = 'Photos of stubborn stains, delicate surfaces or hard-to-reach spots help us bring the right kit and allow enough time. Our team checks them, and only we see them.';
       body = (
         <>
           {photos.length === 0 ? (
             <div className="g2">
               <label className="tile">
                 <input type="file" accept="image/*" multiple className="sr" onChange={(e) => { addPhotos(e.target.files); e.target.value = ''; }} />
-                <Icon name="camera" /><span className="tt">Add photos</span><span className="ts">Oven, bathroom, anything tricky</span>
+                <Icon name="camera" /><span className="tt">Add photos</span><span className="ts">Stains, delicate or hard-to-reach spots</span>
               </label>
-              <Tile icon="arrow" label="Skip" sub="Maybe later" onClick={() => go()} />
+              <Tile icon="arrow" label="Skip" sub="Nothing special" onClick={() => go()} />
             </div>
           ) : (
             <>
@@ -528,7 +549,8 @@ export default function App() {
         ['Where', `${s.address}, ${pc.value}`],
         ['Getting in', s.access === 'home' ? ACCESS.home : `${ACCESS[s.access]}: ${s.accessNote}`],
         ...(s.pref && s.pref !== 'any' ? [['Cleaner', PREF[s.pref]]] : []),
-        ...(photos.length || s.photosSent ? [['Photos', `${photos.length || s.photosSent} for us to check`]] : []),
+        ['Pets', s.pets.none ? 'None' : petText(s.pets).replace(/^./, (c) => c.toUpperCase())],
+        ...(photos.length || s.photosSent ? [['Photos', `${photos.length || s.photosSent} for our team to check`]] : []),
       ];
       body = (
         <>
@@ -536,6 +558,7 @@ export default function App() {
             {lines.map(([k, v]) => <Fragment key={k}><span className="k">{k}</span><span className="v">{money(v)}</span></Fragment>)}
             <span className="sum__total">Total</span><span className="v sum__total">{money(quote.total)}</span>
           </div>
+          {bigJob && <div className="msg msg--info">For a bigger job like this, we may send a team of cleaners so it’s finished sooner. The price stays the same.</div>}
           <dl className="sum sum--info">
             {rows.map(([k, v]) => <div key={k}><dt>{k}</dt><dd>{v}</dd></div>)}
           </dl>
@@ -612,7 +635,7 @@ export default function App() {
         <div className="bar">
           <div className="barin">
             <b>{money(quote.total)}</b>
-            <span>{eta ? `About ${eta} · ` : ''}pay after the clean</span>
+            <span>{eta && <>About {eta}{bigJob ? ' for one cleaner' : ''}<br /></>}Pay after the clean</span>
           </div>
         </div>
       )}

@@ -101,6 +101,7 @@ h1 + .g2, h1 + .g3, h1 + .gflex, h1 + .list, h1 + .inp, h1 + .lbl, h1 + .row2 { 
 .or .wa { width: 100%; }
 .msg { margin-top: 14px; padding: 12px 14px; border-radius: 12px; font-size: 14px; line-height: 1.45; }
 .msg--amber { background: rgba(251, 191, 36, .09); border: 1px solid rgba(251, 191, 36, .38); color: #fde68a; }
+.msg--info { background: rgba(63, 186, 194, .1); border: 1px solid rgba(63, 186, 194, .4); color: #cdeff1; }
 .msg--red { background: rgba(248, 113, 113, .1); border: 1px solid rgba(248, 113, 113, .4); color: #fecaca; }
 h1 + .msg { margin: 0 0 14px; }
 .done { text-align: center; margin-top: 18px; }
