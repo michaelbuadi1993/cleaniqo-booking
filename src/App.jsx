@@ -75,7 +75,7 @@ const SAVED = 'cleaniqo:booking';
 const INITIAL = {
   path: '', i: 0, service: '', size: '', baths: 0, on: {}, addons: {}, day: '', time: '', postcode: '', address: '', borough: '',
   access: '', accessNote: '', pref: '', pets: {}, firstName: '', lastName: '', name: '', phone: '', email: '', terms: false,
-  leadId: null, token: null, photosSent: 0, ph: null,
+  leadId: null, token: null, photosSent: 0, ph: null, link: null, jump: null,
 };
 
 // Today's date in London, then the next days as YYYY-MM-DD.
@@ -156,6 +156,31 @@ export default function App() {
   const h1 = useRef(null);
 
   useEffect(() => { if (paid) clearSaved(); }, [paid]);
+
+  // A booking link from our team (061): the clean is already chosen, so open on "Your details".
+  const linkToken = params.get('link');
+  const [linkNote, setLinkNote] = useState('');
+  useEffect(() => {
+    if (!linkToken || cancelled || paid) return;
+    let off = false;
+    api.bookingLink(linkToken).then((r) => {
+      if (off) return;
+      const p = r.prefill || {};
+      const service = p.service;
+      const addons = p.addons && typeof p.addons === 'object' ? p.addons : {};
+      const on = {};
+      addonsFor(service).forEach((t) => { if (t.options.some((o) => addons[o.key] > 0)) on[t.id] = true; });
+      setS((x) => ({
+        ...x, path: service === 'specialist' ? 'spec' : 'home', service: service === 'specialist' ? '' : service, size: p.size || '', baths: Number(p.baths) || 1,
+        on, addons, day: r.expired ? '' : (p.day || ''), time: r.expired ? '' : (p.time || ''), postcode: p.postcode || '', address: p.address || '',
+        access: p.access || 'home', accessNote: p.accessNote || '', pref: p.pref || 'any', pets: p.pets && typeof p.pets === 'object' ? p.pets : {},
+        firstName: r.customer?.firstName || '', lastName: r.customer?.lastName || '', phone: r.customer?.phone || '', email: r.customer?.email || '',
+        link: linkToken, jump: r.expired ? 'day' : 'details',
+      }));
+      setLinkNote(r.expired ? 'This link has run out, so please choose a new day and time. Everything else is filled in.' : 'We’ve filled in your clean from your chat with us. Just add your details and book.');
+    }).catch((e) => { if (!off) setLinkNote(e.message || ''); });
+    return () => { off = true; };
+  }, [linkToken]);   // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => () => photos.forEach((p) => URL.revokeObjectURL(p.url)), []);   // eslint-disable-line react-hooks/exhaustive-deps
 
   // Anything changed after a quote was made means a fresh quote when they book.
@@ -186,6 +211,11 @@ export default function App() {
     return ['start'];
   }, [done, s.path, s.access, needsQty, s.ph]);
   const cur = screens[Math.min(s.i, screens.length - 1)];
+  useEffect(() => {
+    if (!s.jump) return;
+    const k = screens.indexOf(s.jump);
+    if (k > 0) setS((x) => ({ ...x, i: k, jump: null }));
+  }, [s.jump, screens]);
 
   useEffect(() => {
     try { window.scrollTo({ top: 0 }); } catch (_) { /* ignore */ }
@@ -310,6 +340,7 @@ export default function App() {
           cleanerPreference: s.pref || 'any', specialInstructions: instructions(),
           quote: { base: quote.base + quote.bathSurcharge, extras: quote.extras, total, discountPct: 0 },
           ...(s.ph ? { photoSessionId: s.ph.id, photoToken: s.ph.token } : {}),
+          ...(s.link ? { bookingLink: s.link } : {}),
         });
         leadId = lead.id; token = lead.uploadToken;
         sent = s.ph ? s.ph.sent : 0;
@@ -612,7 +643,7 @@ export default function App() {
         ['Where', `${s.address}, ${pc.value}`],
         ['Getting in', s.access === 'home' ? ACCESS.home : `${ACCESS[s.access]}: ${s.accessNote}`],
         ...(s.pref && s.pref !== 'any' ? [['Cleaner', PREF[s.pref]]] : []),
-        ['Pets', s.pets.none ? 'None' : petText(s.pets).replace(/^./, (c) => c.toUpperCase())],
+        ...(s.pets.none || petText(s.pets) ? [['Pets', s.pets.none ? 'None' : petText(s.pets).replace(/^./, (c) => c.toUpperCase())]] : []),
         ...(photos.length || s.photosSent ? [['Photos', `${photos.length || s.photosSent} for our team to check`]] : []),
       ];
       body = (
@@ -692,6 +723,7 @@ export default function App() {
         <div className="pbar" role="progressbar" aria-label="Progress" aria-valuenow={progress} aria-valuemin={0} aria-valuemax={100}><span style={{ width: `${progress}%` }} /></div>
         <h1 ref={h1} tabIndex={-1}>{q}</h1>
         {sub && <p className="sub">{sub}</p>}
+        {linkNote && (cur === 'details' || cur === 'day' || cur === 'start') && <div className="msg msg--info" role="status">{linkNote}</div>}
         {body}
       </div>
       {showBar && (
