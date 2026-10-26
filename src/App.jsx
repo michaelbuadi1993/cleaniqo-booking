@@ -75,7 +75,7 @@ const SAVED = 'cleaniqo:booking';
 const INITIAL = {
   path: '', i: 0, service: '', size: '', baths: 0, on: {}, addons: {}, day: '', time: '', postcode: '', address: '', borough: '',
   access: '', accessNote: '', pref: '', pets: {}, firstName: '', lastName: '', name: '', phone: '', email: '', terms: false,
-  leadId: null, token: null, photosSent: 0, ph: null, link: null, jump: null,
+  leadId: null, token: null, photosSent: 0, ph: null, link: null, linkExpired: false, addrSet: false, disc: null,
 };
 
 // Today's date in London, then the next days as YYYY-MM-DD.
@@ -160,6 +160,7 @@ export default function App() {
   // A booking link from our team (061): the clean is already chosen, so open on "Your details".
   const linkToken = params.get('link');
   const [linkNote, setLinkNote] = useState('');
+  const [linkLoading, setLinkLoading] = useState(!!linkToken && !cancelled && !paid);
   useEffect(() => {
     if (!linkToken || cancelled || paid) return;
     let off = false;
@@ -175,12 +176,11 @@ export default function App() {
         on, addons, day: r.expired ? '' : (p.day || ''), time: r.expired ? '' : (p.time || ''), postcode: p.postcode || '', address: p.address || '',
         access: p.access || 'home', accessNote: p.accessNote || '', pref: p.pref || 'any', pets: p.pets && typeof p.pets === 'object' ? p.pets : {},
         firstName: r.customer?.firstName || '', lastName: r.customer?.lastName || '', phone: r.customer?.phone || '', email: r.customer?.email || '',
-        link: linkToken, jump: r.expired ? 'day' : (p.postcode && p.address ? 'details' : 'postcode'),
+        link: linkToken, linkExpired: !!r.expired, addrSet: !!(p.postcode && p.address), i: 0,
       }));
-      setLinkNote(r.expired ? 'This link has run out, so please choose a new day and time. Everything else is filled in.'
-        : p.postcode && p.address ? 'We’ve filled in your clean from your chat with us. Just add your details and book.'
-        : 'We’ve filled in your clean from your chat with us. Just add your address and details, and book.');
-    }).catch((e) => { if (!off) setLinkNote(e.message || ''); });
+      setLinkNote('');
+    }).catch((e) => { if (!off) setLinkNote(e.message || 'This booking link isn’t working. You can book below, or message us on WhatsApp.'); })
+      .finally(() => { if (!off) setLinkLoading(false); });
     return () => { off = true; };
   }, [linkToken]);   // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => () => photos.forEach((p) => URL.revokeObjectURL(p.url)), []);   // eslint-disable-line react-hooks/exhaustive-deps
@@ -188,8 +188,8 @@ export default function App() {
   // Anything changed after a quote was made means a fresh quote when they book.
   const set = (patch) => setS((x) => ({ ...x, ...patch, leadId: null, token: null, photosSent: 0 }));
   const go = (patch) => setS((x) => ({ ...x, ...(patch || {}), i: x.i + 1, ...(patch ? { leadId: null, token: null, photosSent: 0 } : {}) }));
-  // From a booking link the rest is already answered, so after the address they go straight to their details.
-  const afterAddress = (patch) => (s.link ? setS((x) => ({ ...x, ...patch, leadId: null, token: null, photosSent: 0, jump: 'details' })) : go(patch));
+  // On the one-page booking from a link, picking the address just fills it in on the same page.
+  const afterAddress = (patch) => (s.link ? set({ ...patch, addrSet: true }) : go(patch));
   const back = () => { setError(''); setS((x) => ({ ...x, i: Math.max(0, x.i - 1) })); };
 
   const booking = s.path === 'home' || s.path === 'spec';
@@ -201,25 +201,24 @@ export default function App() {
 
   // The provisional photo price (060): the same percentage the server applies, on the price-list price before add-ons.
   const photoExtra = s.ph && s.ph.pct > 0 && service !== 'specialist' ? Math.round((quote.base + quote.bathSurcharge) * s.ph.pct) / 100 : 0;
-  const total = Math.round((quote.total + photoExtra) * 100) / 100;
+  // A discount code (062) comes off the clean and its extras (not the photo price), never below zero; the server
+  // works it out the same way and checks it again when they book.
+  const discAmount = s.disc ? +Math.min(Math.max(s.disc.kind === 'percent' ? quote.total * s.disc.value / 100 : s.disc.value, 0), quote.total).toFixed(2) : 0;
+  const total = Math.round((quote.total - discAmount + photoExtra) * 100) / 100;
 
   // Over about 4 hours for one cleaner, we may send a team (owner, 26 Oct 2026: "for specific jobs we may send a team").
   const bigJob = !!quote.etaOne && quote.etaOne[1] > 4;
 
   const screens = useMemo(() => {
     if (done) return ['done'];
+    if (s.link) return ['linkpage'];   // a booking link from our team: everything on one page (owner, 26 Oct 2026)
     const end = ['day', 'time', 'postcode', 'access', ...(s.access && s.access !== 'home' ? ['note'] : []), 'pref', 'pets', 'photos', ...(s.ph && s.ph.priced ? ['photoresult'] : []), 'details', 'review'];
     if (s.path === 'home') return ['start', 'kind', 'size', 'baths', 'extras', ...(needsQty ? ['qty'] : []), ...end];
     if (s.path === 'spec') return ['start', 'spec', ...(needsQty ? ['qty'] : []), ...end];
     if (s.path === 'regular' || s.path === 'turnover') return ['start', 'callback'];
     return ['start'];
-  }, [done, s.path, s.access, needsQty, s.ph]);
-  const cur = screens[Math.min(s.i, screens.length - 1)];
-  useEffect(() => {
-    if (!s.jump) return;
-    const k = screens.indexOf(s.jump);
-    if (k > 0) setS((x) => ({ ...x, i: k, jump: null }));
-  }, [s.jump, screens]);
+  }, [done, s.path, s.access, needsQty, s.ph, s.link]);
+  const cur = linkLoading ? 'loading' : screens[Math.min(s.i, screens.length - 1)];
 
   useEffect(() => {
     try { window.scrollTo({ top: 0 }); } catch (_) { /* ignore */ }
@@ -321,6 +320,72 @@ export default function App() {
     } finally { setBusy(''); }
   };
 
+  // ── discount code ─────────────────────────────────────────────────────────
+  const [codeIn, setCodeIn] = useState('');
+  const [codeErr, setCodeErr] = useState('');
+  const [codeBusy, setCodeBusy] = useState(false);
+  const choices = () => ({ service, ...(service === 'specialist' ? {} : { propertyType: s.size, extraBathrooms: Math.min(Math.max(s.baths - 1, 0), 4) }),
+    extras: quote.extrasLines.filter((l) => !l.key.endsWith('_minimum')).map((l) => ({ key: l.key, qty: l.qty })) });
+  const applyCode = async () => {
+    const code = codeIn.trim().toUpperCase().replace(/\s+/g, '');
+    if (!code) return;
+    setCodeErr(''); setCodeBusy(true);
+    try {
+      const r = await api.discount({ code, ...choices() });
+      set({ disc: { code: r.code, kind: r.kind, value: Number(r.value), label: r.label } });
+      setCodeIn('');
+    } catch (e) {
+      setCodeErr(e.status === 400 ? (e.message || 'That code isn’t valid') : 'Codes can’t be checked just now. Try again in a moment.');
+    } finally { setCodeBusy(false); }
+  };
+  const codeBox = (
+    <div className="code">
+      {s.disc ? (
+        <div className="code__on">
+          <span><b>{s.disc.code}</b> · {s.disc.label}</span>
+          <span className="code__amt">−{money(discAmount)}</span>
+          <button type="button" className="code__x" onClick={() => set({ disc: null })}>Remove</button>
+        </div>
+      ) : (
+        <>
+          <label className="lbl" htmlFor="code">Discount code <span className="opt-l">(optional)</span></label>
+          <div className="code__row">
+            <input id="code" className="inp inp--upper" value={codeIn} autoComplete="off" autoCapitalize="characters" spellCheck={false}
+              onChange={(e) => { setCodeIn(e.target.value); setCodeErr(''); }} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); applyCode(); } }} />
+            <button type="button" className="code__apply" disabled={!codeIn.trim() || codeBusy} onClick={applyCode}>{codeBusy ? 'Checking…' : 'Apply'}</button>
+          </div>
+          {codeErr && <div className="err" role="alert">{codeErr}</div>}
+        </>
+      )}
+    </div>
+  );
+
+  // The price lines, shown on the summary and on the one-page booking.
+  const priceLines = () => {
+    const lines = [];
+    if (service !== 'specialist' && quote.base) lines.push([`${KIND_NAME[service]}, ${(SIZE_SHORT[s.size] || '').toLowerCase()}`, money(quote.base)]);
+    if (quote.bathSurcharge) lines.push([`${Math.min(s.baths - 1, 4)} extra bathroom${s.baths > 2 ? 's' : ''}`, money(quote.bathSurcharge)]);
+    quote.extrasLines.forEach((l) => lines.push([l.label, money(l.amount)]));
+    if (discAmount > 0) lines.push([`Discount: ${s.disc.code}`, `−${money(discAmount)}`]);
+    if (photoExtra > 0) lines.push([`From your photos: ${LEVEL_TEXT[s.ph.level].toLowerCase()} (provisional)`, money(photoExtra)]);
+    return lines;
+  };
+  const sumBox = (
+    <div className="sum">
+      {priceLines().map(([k, v]) => <Fragment key={k}><span className="k">{k}</span><span className="v">{v}</span></Fragment>)}
+      <span className="sum__total">Total</span><span className="v sum__total">{money(total)}</span>
+    </div>
+  );
+  const termsBox = (
+    <label className="tk">
+      <input type="checkbox" checked={s.terms} onChange={(e) => setS((x) => ({ ...x, terms: e.target.checked }))} />
+      <span>
+        I agree to the <a href="https://cleaniqo.co.uk/terms" target="_top" rel="noreferrer">Terms</a> and{' '}
+        <a href="https://cleaniqo.co.uk/privacy" target="_top" rel="noreferrer">Privacy Policy</a>, and to Cleaniqo contacting me about this booking by text, email, phone or WhatsApp.
+      </span>
+    </label>
+  );
+
   const instructions = () => [
     s.access ? `Access: ${ACCESS[s.access]}${s.accessNote.trim() && s.access !== 'home' ? ` — ${s.accessNote.trim()}` : ''}` : '',
     s.pref && s.pref !== 'any' ? `Cleaner preference: ${s.pref}` : '',
@@ -343,6 +408,7 @@ export default function App() {
           bookingDate: s.day, startTime: s.time, address: s.address.trim(), postcode: pc.value, borough: s.borough || undefined,
           cleanerPreference: s.pref || 'any', specialInstructions: instructions(),
           quote: { base: quote.base + quote.bathSurcharge, extras: quote.extras, total, discountPct: 0 },
+          ...(s.disc ? { discountCode: s.disc.code } : {}),
           ...(s.ph ? { photoSessionId: s.ph.id, photoToken: s.ph.token } : {}),
           ...(s.link ? { bookingLink: s.link } : {}),
         });
@@ -351,7 +417,7 @@ export default function App() {
         setS((x) => ({ ...x, leadId, token, photosSent: sent }));
       }
       setBusy('Opening secure payment…');
-      writeSaved({ ...s, leadId, token, photosSent: sent, i: screens.indexOf('review') });
+      writeSaved({ ...s, leadId, token, photosSent: sent, i: Math.max(0, screens.indexOf('review')) });
       const session = await api.createCheckout({
         leadId,
         successUrl: `${window.location.origin}/?success=1&lead=${leadId}`,
@@ -360,10 +426,42 @@ export default function App() {
       if (session?.url) { (window.top || window).location.href = session.url; return; }
       setError('We couldn’t open the payment page. Please try again in a moment.');
     } catch (e) {
+      if (s.disc && /code/i.test(e.message || '')) setS((x) => ({ ...x, disc: null }));
       setError(e.message || 'Something went wrong. Please try again.');
     }
     setBusy('');
   };
+
+  // The postcode and address picker: its own screen on the form, and a section of the one-page booking.
+  const addressPicker = (
+    <>
+      <label className="lbl" htmlFor="pc">Postcode</label>
+      <input id="pc" className="inp inp--pc" value={s.postcode} placeholder="e.g. SE5 8JA" autoComplete="postal-code"
+        onChange={(e) => { set({ postcode: e.target.value.toUpperCase(), address: '', borough: '' }); setAddr({ loading: false, error: '', list: [], manual: false }); }}
+        onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); findAddress(); } }} />
+      {!addr.list.length && !addr.manual && (
+        <button type="button" className="btn" disabled={!pc.ok || addr.loading} onClick={findAddress}>{addr.loading ? 'Looking…' : 'Find my address'}</button>
+      )}
+      {addr.error && <div className="msg msg--amber" role="status">{addr.error}</div>}
+      {addr.list.length > 0 && (
+        <div className="list" role="group" aria-label="Your address">
+          {addr.list.map((a) => (
+            <button type="button" key={a.full} onClick={() => afterAddress({ address: a.full, postcode: (validateUkPostcode(a.postcode).value || pc.value), borough: a.district || a.town || '' })}>
+              {a.full}, {validateUkPostcode(a.postcode).value || pc.value}
+            </button>
+          ))}
+          <button type="button" className="list__other" onClick={() => setAddr((x) => ({ ...x, list: [], manual: true }))}>It’s not here</button>
+        </div>
+      )}
+      {addr.manual && (
+        <>
+          <label className="lbl" htmlFor="ad">First line of the address</label>
+          <input id="ad" className="inp" value={s.address} placeholder="e.g. Flat 2, 14 Elm Road" autoComplete="address-line1" onChange={(e) => set({ address: e.target.value })} />
+          <button type="button" className="btn" disabled={!pc.ok || s.address.trim().length < 4} onClick={() => afterAddress({ address: s.address.trim(), postcode: pc.value })}>Continue</button>
+        </>
+      )}
+    </>
+  );
 
   // ── screens ───────────────────────────────────────────────────────────────
   let q = '', sub = '', body = null;
@@ -494,33 +592,7 @@ export default function App() {
     case 'postcode':
       q = 'Where is it?'; sub = 'We clean across London';
       body = (
-        <>
-          <label className="lbl" htmlFor="pc">Postcode</label>
-          <input id="pc" className="inp inp--pc" value={s.postcode} placeholder="e.g. SE5 8JA" autoComplete="postal-code"
-            onChange={(e) => { set({ postcode: e.target.value.toUpperCase(), address: '', borough: '' }); setAddr({ loading: false, error: '', list: [], manual: false }); }}
-            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); findAddress(); } }} />
-          {!addr.list.length && !addr.manual && (
-            <button type="button" className="btn" disabled={!pc.ok || addr.loading} onClick={findAddress}>{addr.loading ? 'Looking…' : 'Find my address'}</button>
-          )}
-          {addr.error && <div className="msg msg--amber" role="status">{addr.error}</div>}
-          {addr.list.length > 0 && (
-            <div className="list" role="group" aria-label="Your address">
-              {addr.list.map((a) => (
-                <button type="button" key={a.full} onClick={() => afterAddress({ address: a.full, postcode: (validateUkPostcode(a.postcode).value || pc.value), borough: a.district || a.town || '' })}>
-                  {a.full}, {validateUkPostcode(a.postcode).value || pc.value}
-                </button>
-              ))}
-              <button type="button" className="list__other" onClick={() => setAddr((x) => ({ ...x, list: [], manual: true }))}>It’s not here</button>
-            </div>
-          )}
-          {addr.manual && (
-            <>
-              <label className="lbl" htmlFor="ad">First line of the address</label>
-              <input id="ad" className="inp" value={s.address} placeholder="e.g. Flat 2, 14 Elm Road" autoComplete="address-line1" onChange={(e) => set({ address: e.target.value })} />
-              <button type="button" className="btn" disabled={!pc.ok || s.address.trim().length < 4} onClick={() => afterAddress({ address: s.address.trim(), postcode: pc.value })}>Continue</button>
-            </>
-          )}
-        </>
+        addressPicker
       );
       break;
     case 'access':
@@ -637,11 +709,6 @@ export default function App() {
       break;
     case 'review': {
       q = 'All good?';
-      const lines = [];
-      if (service !== 'specialist' && quote.base) lines.push([`${KIND_NAME[service]}, ${(SIZE_SHORT[s.size] || '').toLowerCase()}`, quote.base]);
-      if (quote.bathSurcharge) lines.push([`${Math.min(s.baths - 1, 4)} extra bathroom${s.baths > 2 ? 's' : ''}`, quote.bathSurcharge]);
-      quote.extrasLines.forEach((l) => lines.push([l.label, l.amount]));
-      if (photoExtra > 0) lines.push([`From your photos: ${LEVEL_TEXT[s.ph.level].toLowerCase()} (provisional)`, photoExtra]);
       const rows = [
         ['When', s.day ? `${dayName(s.day, { weekday: 'short', day: 'numeric', month: 'short' })}, ${s.time}` : ''],
         ['Where', `${s.address}, ${pc.value}`],
@@ -652,24 +719,90 @@ export default function App() {
       ];
       body = (
         <>
-          <div className="sum">
-            {lines.map(([k, v]) => <Fragment key={k}><span className="k">{k}</span><span className="v">{money(v)}</span></Fragment>)}
-            <span className="sum__total">Total</span><span className="v sum__total">{money(total)}</span>
-          </div>
+          {sumBox}
           {bigJob && <div className="msg msg--info">For a bigger job like this, we may send a team of cleaners so it’s finished sooner. The price stays the same.</div>}
           <dl className="sum sum--info">
             {rows.map(([k, v]) => <div key={k}><dt>{k}</dt><dd>{v}</dd></div>)}
           </dl>
-          <label className="tk">
-            <input type="checkbox" checked={s.terms} onChange={(e) => setS((x) => ({ ...x, terms: e.target.checked }))} />
-            <span>
-              I agree to the <a href="https://cleaniqo.co.uk/terms" target="_top" rel="noreferrer">Terms</a> and{' '}
-              <a href="https://cleaniqo.co.uk/privacy" target="_top" rel="noreferrer">Privacy Policy</a>, and to Cleaniqo contacting me about this booking by text, email, phone or WhatsApp.
-            </span>
-          </label>
+          {codeBox}
+          {termsBox}
           {error && <div className="msg msg--red" role="alert">{error}</div>}
           <button type="button" className="btn" disabled={!s.terms || !!busy} onClick={book}>{busy || `Book · ${money(total)}`}</button>
           <p className="note">Your card is held, not charged. You pay once the clean is done. Free to cancel up to 24 hours before.</p>
+        </>
+      );
+      break;
+    }
+    case 'loading':
+      q = 'Your booking'; sub = 'Just a moment…';
+      break;
+    case 'linkpage': {
+      // One page (owner, 26 Oct 2026: "it shouldn't be too many pages i think it should be one, that also has a section
+      // for discount codes too"): the clean as chosen with our team, then the few things only they can give, and pay.
+      q = 'Your booking'; sub = 'We’ve filled this in from your chat with us. Check it, add your details and book.';
+      const whenOk = !!s.day && !!s.time;
+      const whereOk = s.addrSet && pc.ok && s.address.trim().length >= 4;
+      const ready = whenOk && whereOk && detailsOk && s.terms;
+      const missing = [!whenOk && 'a day and time', !whereOk && 'your address', !detailsOk && 'your details', !s.terms && 'the tick box'].filter(Boolean);
+      const info = [
+        ['Getting in', s.access === 'home' ? ACCESS.home : `${ACCESS[s.access]}${s.accessNote ? `: ${s.accessNote}` : ''}`],
+        ...(s.pref && s.pref !== 'any' ? [['Cleaner', PREF[s.pref]]] : []),
+        ...(s.pets.none || petText(s.pets) ? [['Pets', s.pets.none ? 'None' : petText(s.pets).replace(/^./, (c) => c.toUpperCase())]] : []),
+      ];
+      body = (
+        <>
+          <section className="sec" aria-labelledby="sec-clean">
+            <h2 id="sec-clean">Your clean</h2>
+            {sumBox}
+            {bigJob && <div className="msg msg--info">For a bigger job like this, we may send a team of cleaners so it’s finished sooner. The price stays the same.</div>}
+            <dl className="sum sum--info">{info.map(([k, v]) => <div key={k}><dt>{k}</dt><dd>{v}</dd></div>)}</dl>
+            <p className="note">Want to change the clean itself? <a className="wa-link" href={`${WHATSAPP_URL}?text=${encodeURIComponent('Hi, I’d like to change the booking you sent me.')}`} target="_blank" rel="noopener noreferrer">Message us on WhatsApp</a></p>
+          </section>
+
+          <section className="sec" aria-labelledby="sec-when">
+            <h2 id="sec-when">When</h2>
+            {s.linkExpired && <div className="msg msg--amber" role="status">This link has run out, so please choose a new day and time.</div>}
+            {whenOk && !s.linkExpired ? (
+              <div className="pick"><span>{dayName(s.day, { weekday: 'long', day: 'numeric', month: 'long' })}, {s.time}</span>
+                <button type="button" className="pick__ch" onClick={() => set({ linkExpired: true })}>Change</button></div>
+            ) : (
+              <div className="row2">
+                <label className="lbl">Day<input type="date" className="inp" min={days[0]} max={londonDays(1, 120).pop()} value={s.day} onChange={(e) => set({ day: e.target.value })} /></label>
+                <label className="lbl">Start time<select className="inp" value={s.time} onChange={(e) => set({ time: e.target.value })}>
+                  <option value="">Choose</option>{TIMES.map((t) => <option key={t} value={t}>{t}</option>)}</select></label>
+              </div>
+            )}
+          </section>
+
+          <section className="sec" aria-labelledby="sec-where">
+            <h2 id="sec-where">Where</h2>
+            {s.addrSet ? (
+              <div className="pick"><span>{s.address}, {pc.value}</span>
+                <button type="button" className="pick__ch" onClick={() => { set({ addrSet: false }); setAddr({ loading: false, error: '', list: [], manual: false }); }}>Change</button></div>
+            ) : addressPicker}
+          </section>
+
+          <section className="sec" aria-labelledby="sec-you">
+            <h2 id="sec-you">Your details</h2>
+            <div className="row2">
+              <label className="lbl">First name<input className="inp" value={s.firstName} autoComplete="given-name" onChange={(e) => set({ firstName: e.target.value })} /></label>
+              <label className="lbl">Last name<input className="inp" value={s.lastName} autoComplete="family-name" onChange={(e) => set({ lastName: e.target.value })} /></label>
+            </div>
+            <label className="lbl">Mobile<input className="inp" type="tel" inputMode="tel" value={s.phone} placeholder="07123 456789" autoComplete="tel-national" onChange={(e) => set({ phone: e.target.value })} /></label>
+            {s.phone.replace(/\s/g, '').length >= 11 && !phoneOk && <div className="err">{validateUkPhone(s.phone).error}</div>}
+            <label className="lbl">Email<input className="inp" type="email" value={s.email} autoComplete="email" onChange={(e) => set({ email: e.target.value })} /></label>
+          </section>
+
+          <div className="sec">{codeBox}</div>
+
+          <div className="sec sec--pay">
+            <div className="paytotal"><span>Total</span><b>{money(total)}</b></div>
+            {termsBox}
+            {error && <div className="msg msg--red" role="alert">{error}</div>}
+            <button type="button" className="btn" disabled={!ready || !!busy} onClick={book}>{busy || `Book · ${money(total)}`}</button>
+            {!ready && !busy && <p className="note">Still needed: {missing.join(', ')}.</p>}
+            <p className="note">Your card is held, not charged. You pay once the clean is done. Free to cancel up to 24 hours before.</p>
+          </div>
         </>
       );
       break;
@@ -712,7 +845,7 @@ export default function App() {
       break;
   }
 
-  const showBar = booking && !done && quote.total > 0 && cur !== 'review';
+  const showBar = booking && !done && quote.total > 0 && cur !== 'review' && cur !== 'linkpage' && cur !== 'loading';
   const progress = done ? 100 : screens.length > 1 ? Math.round(((s.i + 1) / screens.length) * 100) : 6;
   const eta = formatEta(quote.etaOne);
 
@@ -720,14 +853,14 @@ export default function App() {
     <div className="app">
       <div className="wrap">
         <div className="top">
-          {s.i > 0 && !done ? <button type="button" className="backb" onClick={back}>‹ Back</button> : <span />}
+          {s.i > 0 && !done && !s.link ? <button type="button" className="backb" onClick={back}>‹ Back</button> : <span />}
           <img className="logo" src="/cleaniqo-logo.png" alt="Cleaniqo" />
           <span />
         </div>
-        <div className="pbar" role="progressbar" aria-label="Progress" aria-valuenow={progress} aria-valuemin={0} aria-valuemax={100}><span style={{ width: `${progress}%` }} /></div>
+        {!s.link && !linkLoading && <div className="pbar" role="progressbar" aria-label="Progress" aria-valuenow={progress} aria-valuemin={0} aria-valuemax={100}><span style={{ width: `${progress}%` }} /></div>}
         <h1 ref={h1} tabIndex={-1}>{q}</h1>
         {sub && <p className="sub">{sub}</p>}
-        {linkNote && (cur === 'details' || cur === 'day' || cur === 'start' || cur === 'postcode') && <div className="msg msg--info" role="status">{linkNote}</div>}
+        {linkNote && cur === 'start' && <div className="msg msg--info" role="status">{linkNote}</div>}
         {body}
       </div>
       {showBar && (

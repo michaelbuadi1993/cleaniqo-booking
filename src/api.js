@@ -50,6 +50,7 @@ export const api = {
   photoSession: (choices) => post('/api/public/quote/photo-session', choices),
   uploadSessionPhoto,
   checkPhotos: (sessionId, token) => post('/api/public/quote/photo-session/check', { sessionId, token }),
+  discount: (body) => post('/api/public/quote/discount', body),
   bookingLink: (token) => get(`/api/public/booking-link/${encodeURIComponent(token)}`),
   createLead: (payload) => post('/api/public/quote/lead', payload),
   createCheckout: (payload) => post('/api/public/quote/checkout-session', payload),
