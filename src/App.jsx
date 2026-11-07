@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
-import { PROPERTY_TYPES, computeQuote, addonsFor, INCLUDED_NOTE, money, formatEta, validateUkPhone, validateUkPostcode } from './pricing.js';
+import { PROPERTY_TYPES, computeQuote, addonsFor, INCLUDED_NOTE, EXTRA_BATH_SURCHARGE, money, formatEta, validateUkPhone, validateUkPostcode } from './pricing.js';
 import { api, WHATSAPP_URL } from './api.js';
 
 /*
@@ -570,10 +570,13 @@ export default function App() {
       );
       break;
     case 'baths':
-      q = 'How many bathrooms?'; sub = 'One is included';
+      q = 'How many bathrooms?'; sub = 'Count them all. The first one is included in the price.';
       body = (
         <div className="gflex" style={{ '--cols': 5, '--pcols': 5 }} role="group" aria-label={q}>
-          {[1, 2, 3, 4, 5].map((n) => <Tile key={n} label={n === 5 ? '5+' : String(n)} on={s.baths === n} onClick={() => go({ baths: n })} />)}
+          {[1, 2, 3, 4, 5].map((n) => {
+            const add = (EXTRA_BATH_SURCHARGE[service] || {})[Math.min(n - 1, 4)] || 0;
+            return <Tile key={n} label={n === 5 ? '5+' : String(n)} sub={n === 1 ? 'Included' : (add ? `+${money(add)}` : 'Extra')} on={s.baths === n} onClick={() => go({ baths: n })} />;
+          })}
         </div>
       );
       break;
