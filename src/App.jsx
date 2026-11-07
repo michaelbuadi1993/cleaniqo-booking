@@ -60,7 +60,7 @@ const ICONS = {
 const TILE_ICON = { oven: 'oven', fridge: 'fridge', upholstery: 'sofa', carpet: 'carpet', curtains: 'curtain', windows: 'window', outdoor: 'leaf', stairs: 'stairs', garage: 'garage', eco: 'eco' };
 const TILE_SHORT = { upholstery: 'Sofa & armchairs', carpet: 'Carpets', curtains: 'Curtains', windows: 'Outside windows', outdoor: 'Balcony or garden', garage: 'Garage', eco: 'Eco products', stairs: 'Stairs', oven: 'Oven', fridge: 'Fridge' };
 const SIZE_SHORT = { house_share: 'Room in a share', studio: 'Studio', one_bed: '1 bed', two_bed: '2 beds', three_bed: '3 beds', four_bed: '4 beds', five_bed: '5 beds', six_bed: '6 beds' };
-const KIND_NAME = { regular: 'Regular clean', deep: 'Deep clean', end_of_tenancy: 'Moving-out clean', specialist: 'Specialist clean' };
+const KIND_NAME = { regular: 'Regular clean', deep: 'Deep clean', end_of_tenancy: 'End of tenancy clean', specialist: 'Specialist clean' };
 const ACCESS = { home: 'I’ll be in', keysafe: 'Key safe', concierge: 'Concierge or neighbour', other: 'Something else' };
 const NOTE_Q = { keysafe: 'Where’s the key safe?', concierge: 'Who has the key?', other: 'How do we get in?' };
 const NOTE_PH = { keysafe: 'Where it is, and the code', concierge: 'Name or flat number', other: 'Tell us how' };
@@ -543,7 +543,7 @@ export default function App() {
         <>
           {cancelled && !s.path && <div className="msg msg--amber">Payment cancelled. Nothing was taken.</div>}
           <div className="g2" role="group" aria-label={q}>
-            <Tile icon="home" label="Clean my home" sub="One-off, deep or moving out" onClick={() => setS({ ...INITIAL, path: 'home', i: 1 })} />
+            <Tile icon="home" label="Clean my home" sub="One-off, deep or end of tenancy" onClick={() => setS({ ...INITIAL, path: 'home', i: 1 })} />
             <Tile icon="sofa" label="Carpets, sofas, ovens & more" sub="On their own" onClick={() => setS({ ...INITIAL, path: 'spec', i: 1 })} />
             <Tile icon="plan" label="A regular cleaner" sub="Weekly or fortnightly" onClick={() => setS({ ...INITIAL, path: 'regular', i: 1 })} />
             <Tile icon="key" label="Airbnb turnovers" sub="For hosts" onClick={() => setS({ ...INITIAL, path: 'turnover', i: 1 })} />
@@ -556,7 +556,7 @@ export default function App() {
       q = 'What kind of clean?';
       body = (
         <div className="g3" role="group" aria-label={q}>
-          {[['regular', 'Regular', 'home', 'from £60'], ['deep', 'Deep', 'deep', 'from £100'], ['end_of_tenancy', 'Moving out', 'box', 'from £120']].map(([k, l, ic, sb]) => (
+          {[['regular', 'Regular', 'home', 'A routine clean'], ['deep', 'Deep', 'deep', 'Top to bottom'], ['end_of_tenancy', 'End of tenancy', 'box', 'Moving out']].map(([k, l, ic, sb]) => (
             <Tile key={k} icon={ic} label={l} sub={sb} on={s.service === k}
               onClick={() => { const keep = addonsFor(k).map((t) => t.id); const on = {}; const addons = {};
                 Object.keys(s.on).forEach((id) => { if (keep.includes(id)) on[id] = true; });
