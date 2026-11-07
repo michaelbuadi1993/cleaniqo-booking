@@ -70,6 +70,13 @@ const PETS = { none: 'No pets', dog: 'Dog', cat: 'Cat', other: 'Other pets' };
 const petText = (p) => ['dog', 'cat', 'other'].filter((k) => p[k]).map((k) => PETS[k].toLowerCase()).join(', ');
 // Start times every half hour, 08:00 to 16:00.
 const TIMES = Array.from({ length: 17 }, (_, k) => `${String(8 + Math.floor(k / 2)).padStart(2, '0')}:${k % 2 ? '30' : '00'}`);
+// '08:30' → '8:30am', '13:00' → '1pm'.
+const niceTime = (t) => {
+  if (!t) return '';
+  const [h, m] = t.split(':').map(Number);
+  return `${h % 12 || 12}${m ? `:${String(m).padStart(2, '0')}` : ''}${h < 12 ? 'am' : 'pm'}`;
+};
+const TIME_GROUPS = [['Morning', TIMES.filter((t) => t < '12:00')], ['Afternoon', TIMES.filter((t) => t >= '12:00')]];
 const MAX_PHOTOS = 6;
 const SAVED = 'cleaniqo:booking';
 
@@ -638,9 +645,16 @@ export default function App() {
     case 'time':
       q = 'What time?'; sub = 'When we arrive';
       body = (
-        <div className="gflex gtimes" style={{ '--cols': 4, '--pcols': 4 }} role="group" aria-label={q}>
-          {TIMES.map((t) => <Tile key={t} label={t} on={s.time === t} onClick={() => go({ time: t })} />)}
-        </div>
+        <>
+          {TIME_GROUPS.map(([g, list]) => (
+            <fieldset key={g} className="qgroup tgroup">
+              <legend>{g}</legend>
+              <div className="gflex gtimes" style={{ '--cols': 4, '--pcols': 4 }}>
+                {list.map((t) => <Tile key={t} label={niceTime(t)} on={s.time === t} onClick={() => go({ time: t })} />)}
+              </div>
+            </fieldset>
+          ))}
+        </>
       );
       break;
     case 'postcode':
@@ -764,7 +778,7 @@ export default function App() {
     case 'review': {
       q = 'All good?';
       const rows = [
-        ['When', s.day ? `${dayName(s.day, { weekday: 'short', day: 'numeric', month: 'short' })}, ${s.time}` : ''],
+        ['When', s.day ? `${dayName(s.day, { weekday: 'short', day: 'numeric', month: 'short' })}, ${niceTime(s.time)}` : ''],
         ['Where', `${s.address}, ${pc.value}`],
         ['Getting in', s.access === 'home' ? ACCESS.home : `${ACCESS[s.access]}: ${s.accessNote}`],
         ...(s.pref && s.pref !== 'any' ? [['Cleaner', PREF[s.pref]]] : []),
@@ -828,7 +842,7 @@ export default function App() {
             {linesOpen && <>{sumBox}{bigJob && <p className="lrow__sub lrow__team">As this is a bigger job, we may send a team of cleaners to finish it sooner. Not to worry though, the price will stay the same!</p>}</>}
 
             {whenOk && !s.linkExpired ? (
-              <div className="lrow"><span className="lrow__k">When</span><span className="lrow__main">{dayName(s.day, { weekday: 'short', day: 'numeric', month: 'short' })}, {s.time}</span>
+              <div className="lrow"><span className="lrow__k">When</span><span className="lrow__main">{dayName(s.day, { weekday: 'short', day: 'numeric', month: 'short' })}, {niceTime(s.time)}</span>
                 <button type="button" className="pick__ch" onClick={() => set({ linkExpired: true })}>Change</button></div>
             ) : (
               <div className="lrow lrow--open">
@@ -836,7 +850,7 @@ export default function App() {
                 <div className="row2">
                   <label className="lbl">Day<input id="lp-day" type="date" className={`inp${n('lp-day')}`} min={days[0]} max={lastDay} value={s.day} onChange={(e) => set({ day: e.target.value })} /></label>
                   <label className="lbl">Start time<select className="inp" value={s.time} onChange={(e) => set({ time: e.target.value })}>
-                    <option value="">Choose</option>{TIMES.map((t) => <option key={t} value={t}>{t}</option>)}</select></label>
+                    <option value="">Choose</option>{TIMES.map((t) => <option key={t} value={t}>{niceTime(t)}</option>)}</select></label>
                 </div>
               </div>
             )}
