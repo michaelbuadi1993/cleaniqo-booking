@@ -199,3 +199,6 @@ h1 + .msg { margin: 0 0 14px; }
 .cal__d:hover:not([disabled]) { border-color: rgba(0, 255, 136, .55); }
 .cal__d[aria-pressed="true"] { border-color: var(--accent); background: rgba(0, 255, 136, .14); color: #fff; }
 .cal__d[disabled] { background: none; color: rgba(148, 163, 184, .35); cursor: not-allowed; }
+.cal__type { margin-top: 16px; }
+.cal__msg { margin: 6px 0 0; min-height: 20px; font-size: 14px; color: var(--amber); }
+.cal__msg:empty { min-height: 0; }

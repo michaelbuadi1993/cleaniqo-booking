@@ -96,6 +96,23 @@ const BOOK_AHEAD_DAYS = 365;
 function MonthCalendar({ value, min, max, onPick }) {
   const startMonth = (value || min).slice(0, 7);
   const [month, setMonth] = useState(startMonth);
+  // Typing a date (DD/MM/YYYY) moves the calendar to that month and marks the day; Continue confirms it.
+  const [typed, setTyped] = useState('');
+  const [pending, setPending] = useState('');
+  const [typedMsg, setTypedMsg] = useState('');
+  const nice = (iso) => `${dayName(iso, { weekday: 'short' })} ${dayName(iso, { day: 'numeric', month: 'short', year: 'numeric' })}`;
+  const onType = (raw) => {
+    const digits = raw.replace(/\D/g, '').slice(0, 8);
+    const txt = [digits.slice(0, 2), digits.slice(2, 4), digits.slice(4, 8)].filter(Boolean).join('/');
+    setTyped(txt); setPending(''); setTypedMsg('');
+    if (digits.length < 8) return;
+    const dd = Number(digits.slice(0, 2)), mm = Number(digits.slice(2, 4)), yy = Number(digits.slice(4, 8));
+    const dt = new Date(Date.UTC(yy, mm - 1, dd));
+    if (dt.getUTCFullYear() !== yy || dt.getUTCMonth() !== mm - 1 || dt.getUTCDate() !== dd) { setTypedMsg("That date doesn't exist. Check the day and month."); return; }
+    const iso = dt.toISOString().slice(0, 10);
+    if (iso < min || iso > max) { setTypedMsg(`Choose a day from ${nice(min)} to ${nice(max)}.`); return; }
+    setMonth(iso.slice(0, 7)); setPending(iso);
+  };
   const [y, m] = month.split('-').map(Number);
   const first = new Date(Date.UTC(y, m - 1, 1));
   const daysIn = new Date(Date.UTC(y, m, 0)).getUTCDate();
@@ -109,7 +126,7 @@ function MonthCalendar({ value, min, max, onPick }) {
   for (let d = 1; d <= daysIn; d++) {
     const iso = `${month}-${String(d).padStart(2, '0')}`;
     const off = iso < min || iso > max;
-    const on = value === iso;
+    const on = (pending || value) === iso;
     cells.push(
       <button key={iso} type="button" className="cal__d" disabled={off} aria-pressed={on ? 'true' : 'false'}
         aria-label={dayName(iso, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })} onClick={() => onPick(iso)}>{d}</button>,
@@ -124,6 +141,12 @@ function MonthCalendar({ value, min, max, onPick }) {
       </div>
       <div className="cal__grid cal__wk" aria-hidden="true">{['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((w) => <span key={w}>{w}</span>)}</div>
       <div className="cal__grid" role="group" aria-label={title}>{cells}</div>
+      <label className="lbl cal__type">Or type a date
+        <input className="inp" inputMode="numeric" autoComplete="off" placeholder="DD/MM/YYYY" value={typed} onChange={(e) => onType(e.target.value)}
+          aria-describedby="cal-typed-msg" />
+      </label>
+      <p id="cal-typed-msg" className="cal__msg" role="status">{typedMsg}</p>
+      {pending && <button type="button" className="btn" onClick={() => onPick(pending)}>Continue with {nice(pending)}</button>}
     </div>
   );
 }
