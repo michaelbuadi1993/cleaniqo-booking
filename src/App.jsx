@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
-import { PROPERTY_TYPES, computeQuote, addonsFor, INCLUDED_NOTE, EXTRA_BATH_SURCHARGE, money, formatEta, validateUkPhone, validateUkPostcode } from './pricing.js';
+import { PROPERTY_TYPES, computeQuote, addonsFor, INCLUDED_NOTE, money, formatEta, validateUkPhone, validateUkPostcode } from './pricing.js';
 import { api, WHATSAPP_URL } from './api.js';
 
 /*
@@ -269,6 +269,7 @@ export default function App() {
 
   // Over about 4 hours for one cleaner, we may send a team (owner, 26 Oct 2026: "for specific jobs we may send a team").
   const bigJob = !!quote.etaOne && quote.etaOne[1] > 4;
+  const eta = formatEta(quote.etaOne);
 
   const screens = useMemo(() => {
     if (done) return ['done'];
@@ -300,11 +301,6 @@ export default function App() {
       if (!t.pick || t.pick === 'one' || t.options.length === 1) addons[t.options[0].key] = 1;
     }
     set({ on, addons });
-  };
-  const tileFrom = (t) => {
-    const p = Math.min(...t.options.map((o) => o.price));
-    if (t.options.length > 1) return `from ${money(p)}`;
-    return t.pick === 'count' ? `${money(p)} each` : money(p);
   };
   const qtyOk = onTiles.every((t) => t.options.some((o) => (s.addons[o.key] || 0) > 0));
 
@@ -427,7 +423,7 @@ export default function App() {
   // The price lines, shown on the summary and on the one-page booking.
   const priceLines = () => {
     const lines = [];
-    if (service !== 'specialist' && quote.base) lines.push([`${KIND_NAME[service]}, ${(SIZE_SHORT[s.size] || '').toLowerCase()}`, money(quote.base)]);
+    if (service !== 'specialist' && quote.base) lines.push([`${KIND_NAME[service]}, ${(SIZE_SHORT[s.size] || '').toLowerCase()}, 1 bathroom included`, money(quote.base)]);
     if (quote.bathSurcharge) lines.push([`${Math.min(s.baths - 1, 4)} extra bathroom${s.baths > 2 ? 's' : ''}`, money(quote.bathSurcharge)]);
     quote.extrasLines.forEach((l) => lines.push([l.label, money(l.amount)]));
     if (discAmount > 0) lines.push([`Discount: ${s.disc.code}`, `−${money(discAmount)}`]);
@@ -438,6 +434,7 @@ export default function App() {
     <div className="sum">
       {priceLines().map(([k, v]) => <Fragment key={k}><span className="k">{k}</span><span className="v">{v}</span></Fragment>)}
       <span className="sum__total">Total</span><span className="v sum__total">{money(total)}</span>
+      {eta && <span className="sum__eta">About {eta}{bigJob ? ' for one cleaner' : ''}</span>}
     </div>
   );
   const termsBox = (
@@ -573,10 +570,7 @@ export default function App() {
       q = 'How many bathrooms?'; sub = 'Count them all. The first one is included in the price.';
       body = (
         <div className="gflex" style={{ '--cols': 5, '--pcols': 5 }} role="group" aria-label={q}>
-          {[1, 2, 3, 4, 5].map((n) => {
-            const add = (EXTRA_BATH_SURCHARGE[service] || {})[Math.min(n - 1, 4)] || 0;
-            return <Tile key={n} label={n === 5 ? '5+' : String(n)} sub={n === 1 ? 'Included' : (add ? `+${money(add)}` : 'Extra')} on={s.baths === n} onClick={() => go({ baths: n })} />;
-          })}
+          {[1, 2, 3, 4, 5].map((n) => <Tile key={n} label={n === 5 ? '5+' : String(n)} sub={n === 1 ? 'Included' : ''} on={s.baths === n} onClick={() => go({ baths: n })} />)}
         </div>
       );
       break;
@@ -587,7 +581,7 @@ export default function App() {
       body = (
         <>
           <div className="gflex" style={{ '--cols': [3, 5, 6, 9].includes(tiles.length) ? 3 : 4 }} role="group" aria-label={q}>
-            {tiles.map((t) => <Tile key={t.id} multi icon={TILE_ICON[t.id] || 'dots'} label={TILE_SHORT[t.id] || t.label} sub={tileFrom(t)} on={!!s.on[t.id]} onClick={() => toggleTile(t)} />)}
+            {tiles.map((t) => <Tile key={t.id} multi icon={TILE_ICON[t.id] || 'dots'} label={TILE_SHORT[t.id] || t.label} on={!!s.on[t.id]} onClick={() => toggleTile(t)} />)}
           </div>
           <button type="button" className="btn" disabled={cur === 'spec' && !onTiles.length} onClick={() => go()}>
             {cur === 'extras' && !onTiles.length ? 'No thanks' : 'Continue'}
@@ -606,7 +600,7 @@ export default function App() {
               {t.pick === 'one' ? (
                 <div className="g2">
                   {t.options.map((o) => (
-                    <Tile key={o.key} label={o.label} sub={money(o.price)} on={(s.addons[o.key] || 0) > 0} className="opt"
+                    <Tile key={o.key} label={o.label} on={(s.addons[o.key] || 0) > 0} className="opt"
                       onClick={() => { const addons = { ...s.addons }; t.options.forEach((x) => { delete addons[x.key]; }); addons[o.key] = 1; set({ addons }); }} />
                   ))}
                 </div>
@@ -617,7 +611,7 @@ export default function App() {
                 const put = (v) => { const addons = { ...s.addons }; if (v > 0) addons[o.key] = v; else delete addons[o.key]; set({ addons }); };
                 return (
                   <div className="qty" key={o.key}>
-                    <span><b>{label}</b><span className="ts" style={{ display: 'block' }}>{money(o.price)} each</span></span>
+                    <span><b>{label}</b></span>
                     <span className="stp">
                       <button type="button" aria-label={`Fewer: ${o.label}`} disabled={n <= min} onClick={() => put(Math.max(min, n - 1))}>−</button>
                       <span aria-live="polite">{n}</span>
@@ -778,6 +772,7 @@ export default function App() {
       ];
       body = (
         <>
+          <h2 className="sum__h">Your price</h2>
           {sumBox}
           {bigJob && <div className="msg msg--info">For a bigger job like this, we may send a team of cleaners so it’s finished sooner. The price stays the same.</div>}
           <dl className="sum sum--info">
@@ -918,9 +913,7 @@ export default function App() {
       break;
   }
 
-  const showBar = booking && !done && quote.total > 0 && cur !== 'review' && cur !== 'linkpage' && cur !== 'loading';
   const progress = done ? 100 : screens.length > 1 ? Math.round(((s.i + 1) / screens.length) * 100) : 6;
-  const eta = formatEta(quote.etaOne);
 
   return (
     <div className="app">
@@ -936,14 +929,6 @@ export default function App() {
         {linkNote && cur === 'start' && <div className="msg msg--info" role="status">{linkNote}</div>}
         {body}
       </div>
-      {showBar && (
-        <div className="bar">
-          <div className="barin">
-            <b>{money(total)}</b>
-            <span>{eta && <>About {eta}{bigJob ? ' for one cleaner' : ''}<br /></>}Pay after the clean</span>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

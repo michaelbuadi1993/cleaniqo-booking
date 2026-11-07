@@ -202,3 +202,6 @@ h1 + .msg { margin: 0 0 14px; }
 .cal__type { margin-top: 16px; }
 .cal__msg { margin: 6px 0 0; min-height: 20px; font-size: 14px; color: var(--amber); }
 .cal__msg:empty { min-height: 0; }
+.sum__h { margin: 24px 0 8px; font-size: 17px; color: #fff; }
+.sum__eta { grid-column: 1 / -1; font-size: 13px; color: var(--muted); }
+.sum__h + .sum { margin-top: 0; }
