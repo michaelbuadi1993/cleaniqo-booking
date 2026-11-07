@@ -184,3 +184,18 @@ h1 + .msg { margin: 0 0 14px; }
 .wrap--paybar .lbl { margin-top: 10px; }
 .wrap--paybar .sec h2 { margin-bottom: 0; }
 .lcard .sum + .lrow__team { margin-top: -4px; }
+
+/* Month calendar for picking the day. */
+.cal { border: 2px solid var(--line); border-radius: 18px; background: var(--card); padding: 14px; margin-top: 24px; }
+.cal__head { display: grid; grid-template-columns: 44px minmax(0, 1fr) 44px; align-items: center; margin-bottom: 10px; }
+.cal__title { text-align: center; font-weight: 700; font-size: 17px; color: #fff; }
+.cal__nav { width: 44px; height: 44px; border-radius: 12px; border: 2px solid var(--line-hi); background: none; color: var(--text); font-size: 24px; line-height: 1; }
+.cal__nav:hover:not([disabled]) { border-color: var(--accent); }
+.cal__nav[disabled] { opacity: .25; cursor: not-allowed; }
+.cal__grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; }
+.cal__wk { margin-bottom: 6px; }
+.cal__wk span { text-align: center; font-size: 12px; font-weight: 600; color: var(--muted); }
+.cal__d { min-height: 44px; border-radius: 12px; border: 2px solid transparent; background: var(--card-hi); color: var(--text); font-size: 16px; font-weight: 600; }
+.cal__d:hover:not([disabled]) { border-color: rgba(0, 255, 136, .55); }
+.cal__d[aria-pressed="true"] { border-color: var(--accent); background: rgba(0, 255, 136, .14); color: #fff; }
+.cal__d[disabled] { background: none; color: rgba(148, 163, 184, .35); cursor: not-allowed; }

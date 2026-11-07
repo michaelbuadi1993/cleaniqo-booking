@@ -89,6 +89,45 @@ function londonDays(from, n) {
 }
 const dayName = (iso, opts) => new Date(`${iso}T12:00:00Z`).toLocaleDateString('en-GB', { timeZone: 'UTC', ...opts });
 
+// How far ahead people can book.
+const BOOK_AHEAD_DAYS = 365;
+
+// A month calendar: past days and today can't be picked; arrows move a month at a time, up to a year ahead.
+function MonthCalendar({ value, min, max, onPick }) {
+  const startMonth = (value || min).slice(0, 7);
+  const [month, setMonth] = useState(startMonth);
+  const [y, m] = month.split('-').map(Number);
+  const first = new Date(Date.UTC(y, m - 1, 1));
+  const daysIn = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  const lead = (first.getUTCDay() + 6) % 7; // Monday first
+  const shift = (n) => { const d = new Date(Date.UTC(y, m - 1 + n, 1)); setMonth(d.toISOString().slice(0, 7)); };
+  const canBack = month > min.slice(0, 7);
+  const canFwd = month < max.slice(0, 7);
+  const title = first.toLocaleDateString('en-GB', { timeZone: 'UTC', month: 'long', year: 'numeric' });
+  const cells = [];
+  for (let k = 0; k < lead; k++) cells.push(<span key={`b${k}`} aria-hidden="true" />);
+  for (let d = 1; d <= daysIn; d++) {
+    const iso = `${month}-${String(d).padStart(2, '0')}`;
+    const off = iso < min || iso > max;
+    const on = value === iso;
+    cells.push(
+      <button key={iso} type="button" className="cal__d" disabled={off} aria-pressed={on ? 'true' : 'false'}
+        aria-label={dayName(iso, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })} onClick={() => onPick(iso)}>{d}</button>,
+    );
+  }
+  return (
+    <div className="cal">
+      <div className="cal__head">
+        <button type="button" className="cal__nav" onClick={() => shift(-1)} disabled={!canBack} aria-label="Previous month">‹</button>
+        <span className="cal__title" aria-live="polite">{title}</span>
+        <button type="button" className="cal__nav" onClick={() => shift(1)} disabled={!canFwd} aria-label="Next month">›</button>
+      </div>
+      <div className="cal__grid cal__wk" aria-hidden="true">{['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((w) => <span key={w}>{w}</span>)}</div>
+      <div className="cal__grid" role="group" aria-label={title}>{cells}</div>
+    </div>
+  );
+}
+
 function Icon({ name, size = 36 }) {
   return (
     <svg className="ic" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -152,7 +191,6 @@ export default function App() {
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
   const [done, setDone] = useState(paid ? 'booked' : '');
-  const [moreDates, setMoreDates] = useState(false);
   const h1 = useRef(null);
 
   useEffect(() => { if (paid) clearSaved(); }, [paid]);
@@ -468,7 +506,8 @@ export default function App() {
 
   // ── screens ───────────────────────────────────────────────────────────────
   let q = '', sub = '', body = null;
-  const days = londonDays(1, 8);
+  const days = londonDays(1, 1);
+  const lastDay = londonDays(1, BOOK_AHEAD_DAYS).pop();
   switch (cur) {
     case 'start':
       q = 'What do you need?'; sub = 'Tap one';
@@ -571,16 +610,7 @@ export default function App() {
       q = 'Which day?';
       body = (
         <>
-          <div className="g2" role="group" aria-label={q}>
-            {days.map((d) => <Tile key={d} label={dayName(d, { weekday: 'short' })} sub={dayName(d, { day: 'numeric', month: 'short' })} on={s.day === d} onClick={() => go({ day: d })} />)}
-          </div>
-          {!moreDates && <button type="button" className="link" onClick={() => setMoreDates(true)}>Another date</button>}
-          {moreDates && (
-            <label className="lbl">Pick a date
-              <input type="date" className="inp" min={days[0]} max={londonDays(1, 120).pop()} value={s.day && !days.includes(s.day) ? s.day : ''}
-                onChange={(e) => e.target.value && go({ day: e.target.value })} />
-            </label>
-          )}
+          <MonthCalendar value={s.day} min={days[0]} max={lastDay} onPick={(d) => go({ day: d })} />
         </>
       );
       break;
@@ -782,7 +812,7 @@ export default function App() {
               <div className="lrow lrow--open">
                 {s.linkExpired && !whenOk && <div className="msg msg--amber" role="status">This link has run out, so please choose a new day and time.</div>}
                 <div className="row2">
-                  <label className="lbl">Day<input id="lp-day" type="date" className={`inp${n('lp-day')}`} min={days[0]} max={londonDays(1, 120).pop()} value={s.day} onChange={(e) => set({ day: e.target.value })} /></label>
+                  <label className="lbl">Day<input id="lp-day" type="date" className={`inp${n('lp-day')}`} min={days[0]} max={lastDay} value={s.day} onChange={(e) => set({ day: e.target.value })} /></label>
                   <label className="lbl">Start time<select className="inp" value={s.time} onChange={(e) => set({ time: e.target.value })}>
                     <option value="">Choose</option>{TIMES.map((t) => <option key={t} value={t}>{t}</option>)}</select></label>
                 </div>
