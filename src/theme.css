@@ -205,3 +205,6 @@ h1 + .msg { margin: 0 0 14px; }
 .sum__h { margin: 24px 0 8px; font-size: 17px; color: #fff; }
 .sum__eta { grid-column: 1 / -1; font-size: 13px; color: var(--muted); }
 .sum__h + .sum { margin-top: 0; }
+.gtimes .tile.num { min-height: 64px; }
+.gtimes .tile.num .tt { font-size: 19px; }
+@media (max-width: 480px) { .gtimes { gap: 8px; } .gtimes > * { flex-basis: calc((100% - 3 * 8px) / 4); } .gtimes .tile.num .tt { font-size: 17px; } }

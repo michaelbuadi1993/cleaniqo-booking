@@ -68,7 +68,8 @@ const LEVEL_TEXT = { moderate: 'Moderately dirty', heavy: 'Heavily soiled' };
 const PREF = { any: 'Don’t mind', female: 'Female', male: 'Male' };
 const PETS = { none: 'No pets', dog: 'Dog', cat: 'Cat', other: 'Other pets' };
 const petText = (p) => ['dog', 'cat', 'other'].filter((k) => p[k]).map((k) => PETS[k].toLowerCase()).join(', ');
-const TIMES = ['08:00', '09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00'];
+// Start times every half hour, 08:00 to 16:00.
+const TIMES = Array.from({ length: 17 }, (_, k) => `${String(8 + Math.floor(k / 2)).padStart(2, '0')}:${k % 2 ? '30' : '00'}`);
 const MAX_PHOTOS = 6;
 const SAVED = 'cleaniqo:booking';
 
@@ -637,7 +638,7 @@ export default function App() {
     case 'time':
       q = 'What time?'; sub = 'When we arrive';
       body = (
-        <div className="g3" role="group" aria-label={q}>
+        <div className="gflex gtimes" style={{ '--cols': 4, '--pcols': 4 }} role="group" aria-label={q}>
           {TIMES.map((t) => <Tile key={t} label={t} on={s.time === t} onClick={() => go({ time: t })} />)}
         </div>
       );
