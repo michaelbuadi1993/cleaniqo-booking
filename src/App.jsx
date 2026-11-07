@@ -774,7 +774,7 @@ export default function App() {
         <>
           <h2 className="sum__h">Your price</h2>
           {sumBox}
-          {bigJob && <div className="msg msg--info">As this is a bigger job, we may send a team of cleaners to finish it sooner. The price stays the same.</div>}
+          {bigJob && <div className="msg msg--info">As this is a bigger job, we may send a team of cleaners to finish it sooner. Not to worry though, the price will stay the same!</div>}
           <dl className="sum sum--info">
             {rows.map(([k, v]) => <div key={k}><dt>{k}</dt><dd>{v}</dd></div>)}
           </dl>
@@ -824,7 +824,7 @@ export default function App() {
               <b className="lrow__amt">{money(total)}</b>
             </div>
             <button type="button" className="lmore" aria-expanded={linesOpen} onClick={() => setLinesOpen((o) => !o)}>{linesOpen ? 'Hide the price breakdown' : 'See the price breakdown'}</button>
-            {linesOpen && <>{sumBox}{bigJob && <p className="lrow__sub lrow__team">As this is a bigger job, we may send a team of cleaners to finish it sooner. The price stays the same.</p>}</>}
+            {linesOpen && <>{sumBox}{bigJob && <p className="lrow__sub lrow__team">As this is a bigger job, we may send a team of cleaners to finish it sooner. Not to worry though, the price will stay the same!</p>}</>}
 
             {whenOk && !s.linkExpired ? (
               <div className="lrow"><span className="lrow__k">When</span><span className="lrow__main">{dayName(s.day, { weekday: 'short', day: 'numeric', month: 'short' })}, {s.time}</span>
