@@ -214,6 +214,14 @@ export default function App() {
   // Back from Stripe without paying: put them back on the last screen with everything as they left it.
   const [s, setS] = useState(() => {
     if (cancelled) { const saved = readSaved(); if (saved) return { ...INITIAL, ...saved }; }
+    // A service page on the website sends ?clean=… so the form opens just past that choice (owner, 10 Nov 2026).
+    // Back still works: it steps to the screen they skipped.
+    const clean = params.get('clean');
+    if (!paid && !params.get('link')) {
+      if (clean === 'regular' || clean === 'deep' || clean === 'end_of_tenancy') return { ...INITIAL, path: 'home', service: clean, i: 2 };
+      if (clean === 'turnover') return { ...INITIAL, path: 'turnover', i: 1 };
+      if (clean === 'regular_plan') return { ...INITIAL, path: 'regular', i: 1 };
+    }
     return INITIAL;
   });
   const [photos, setPhotos] = useState([]);           // { file, url }
