@@ -1,7 +1,7 @@
 // Cleaniqo pricing engine
 // Source: Cleaniqo official price list (spreadsheet, Apr 2026)
 // Services offered online: Regular, Deep, End of Tenancy
-// Airbnb turnovers + recurring schedules are arranged over the phone.
+// Short-let turnovers + recurring schedules are arranged over the phone.
 
 export const SERVICES = [
   {

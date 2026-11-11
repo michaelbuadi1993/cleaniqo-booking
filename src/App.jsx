@@ -5,7 +5,7 @@ import { api, WHATSAPP_URL } from './api.js';
 /*
  * The booking page, one question per screen (owner, 26 Oct 2026: "super simplified", "headache free").
  * One-off cleans and specialist cleans (carpets, sofas, ovens…) are booked and paid here as before
- * (lead → Stripe → webhook). Regular cleaners and Airbnb turnovers leave their details for a call back,
+ * (lead → Stripe → webhook). Regular cleaners and short-let turnovers leave their details for a call back,
  * or go straight to WhatsApp. Prices come from pricing.js; the server re-prices and refuses any difference.
  */
 
@@ -554,7 +554,7 @@ export default function App() {
             <Tile icon="home" label="Clean my home" sub="One-off, deep or end of tenancy" onClick={() => setS({ ...INITIAL, path: 'home', i: 1 })} />
             <Tile icon="sofa" label="Carpets, sofas, ovens & more" sub="On their own" onClick={() => setS({ ...INITIAL, path: 'spec', i: 1 })} />
             <Tile icon="plan" label="A regular cleaner" sub="Weekly or fortnightly" onClick={() => setS({ ...INITIAL, path: 'regular', i: 1 })} />
-            <Tile icon="key" label="Airbnb turnovers" sub="For hosts" onClick={() => setS({ ...INITIAL, path: 'turnover', i: 1 })} />
+            <Tile icon="key" label="Short-let turnovers" sub="Airbnb, Booking.com & more" onClick={() => setS({ ...INITIAL, path: 'turnover', i: 1 })} />
           </div>
           <p className="note">Not sure? <a href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer" className="wa-link">Ask us on WhatsApp</a></p>
         </>
@@ -900,7 +900,7 @@ export default function App() {
     }
     case 'callback': {
       const host = s.path === 'turnover';
-      q = host ? 'Airbnb turnovers' : 'A regular cleaner';
+      q = host ? 'Short-let turnovers' : 'A regular cleaner';
       sub = 'Leave a few details and one of our team will call you. Or chat to us on WhatsApp straight away.';
       body = (
         <>
@@ -911,7 +911,7 @@ export default function App() {
           {error && <div className="msg msg--red" role="alert">{error}</div>}
           <button type="button" className="btn" disabled={!callbackOk || !!busy} onClick={sendCallback}>{busy || 'Call me back'}</button>
           <div className="or"><span className="note">or</span>
-            <a className="wa" href={`${WHATSAPP_URL}?text=${encodeURIComponent(host ? 'Hi, I’d like to talk about Airbnb turnovers.' : 'Hi, I’d like a regular cleaner.')}`} target="_blank" rel="noopener noreferrer">Chat on WhatsApp now</a>
+            <a className="wa" href={`${WHATSAPP_URL}?text=${encodeURIComponent(host ? 'Hi, I’d like to talk about short-let turnovers.' : 'Hi, I’d like a regular cleaner.')}`} target="_blank" rel="noopener noreferrer">Chat on WhatsApp now</a>
           </div>
         </>
       );
