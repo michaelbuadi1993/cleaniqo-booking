@@ -205,6 +205,11 @@ function clearSaved() {
   try { sessionStorage.removeItem(SAVED); } catch (_) { /* ignore */ }
 }
 
+// What the server says a code takes off. Older server replies give only the amount for these choices, so that is used as a fixed amount.
+const discFrom = (r) => (r.kind && r.value != null
+  ? { code: r.code, kind: r.kind, value: Number(r.value), label: r.label }
+  : { code: r.code, kind: 'amount', value: Number(r.amount) || 0, label: r.label });
+
 export default function App() {
   useBroadcastHeight();
   const params = new URLSearchParams(window.location.search);
@@ -256,6 +261,14 @@ export default function App() {
         link: linkToken, linkExpired: !!r.expired, addrSet: !!(p.postcode && p.address), i: 0,
       }));
       setLinkNote('');
+      // A discount our team put on the link (dashboard 085): applied straight away, checked by the server like a typed code.
+      const linkCode = typeof p.discountCode === 'string' ? p.discountCode : '';
+      if (linkCode && !r.expired) {
+        api.discount({ code: linkCode, service, ...(service === 'specialist' ? {} : { propertyType: p.size, extraBathrooms: Math.min(Math.max((Number(p.baths) || 1) - 1, 0), 4) }),
+          extras: Object.keys(addons).filter((k) => addons[k] > 0).map((k) => ({ key: k, qty: addons[k] })) })
+          .then((d) => { if (!off) setS((x) => ({ ...x, disc: discFrom(d) })); })
+          .catch(() => {});   // a code that has ended is simply left off; they can still type one
+      }
     }).catch((e) => { if (!off) setLinkNote(e.message || 'This booking link isn’t working. You can book below, or message us on WhatsApp.'); })
       .finally(() => { if (!off) setLinkLoading(false); });
     return () => { off = true; };
@@ -408,7 +421,7 @@ export default function App() {
     setCodeErr(''); setCodeBusy(true);
     try {
       const r = await api.discount({ code, ...choices() });
-      set({ disc: { code: r.code, kind: r.kind, value: Number(r.value), label: r.label } });
+      set({ disc: discFrom(r) });
       setCodeIn('');
     } catch (e) {
       setCodeErr(e.status === 400 ? (e.message || 'That code isn’t valid') : 'Codes can’t be checked just now. Try again in a moment.');
