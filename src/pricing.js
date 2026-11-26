@@ -250,7 +250,7 @@ export function priceAddons(service, selected = {}) {
   return { lines, total: +total.toFixed(2), minutes };
 }
 
-// Card is authorised or saved now and only charged once the clean is completed —
+// The card is charged the full amount at booking (owner, 26 Nov 2026) —
 // so the customer always sees the full amount as the figure to be charged.
 
 function lookup(table, service, size, fallback = 0) {

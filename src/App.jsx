@@ -760,7 +760,7 @@ export default function App() {
             </div>
             {more && s.ph.reasons.length > 0 && <ul className="pres__why">{s.ph.reasons.map((r) => <li key={r}>{r}</li>)}</ul>}
             <p className="pres__note">{more
-              ? 'This is provisional. Our team checks your photos before the clean and can only lower it, never raise it. Your card is held, not charged, until the clean is done.'
+              ? 'This is provisional. Our team checks your photos before the clean and can only lower it, never raise it. If it comes down, we refund the difference.'
               : 'Our team will still look at them, so your cleaner arrives with the right kit.'}</p>
           </div>
           <button type="button" className="btn" onClick={() => go()}>Continue</button>
@@ -805,7 +805,7 @@ export default function App() {
           {termsBox}
           {error && <div className="msg msg--red" role="alert">{error}</div>}
           <button type="button" className="btn" disabled={!s.terms || !!busy} onClick={book}>{busy || `Book · ${money(total)}`}</button>
-          <p className="note">Your card is held, not charged. You pay once the clean is done. Free to cancel up to 24 hours before.</p>
+          <p className="note">You pay now to confirm your booking. Free to cancel up to 24 hours before, with a full refund.</p>
         </>
       );
       break;
@@ -886,11 +886,11 @@ export default function App() {
 
           <div className={`lterms${n('terms')}`}>{termsBox}</div>
           {error && <div className="msg msg--red" role="alert">{error}</div>}
-          <p className="note">Your card is held, not charged. You pay once the clean is done. Free to cancel up to 24 hours before. <a className="wa-link" href={`${WHATSAPP_URL}?text=${encodeURIComponent('Hi, I’d like to change the booking you sent me.')}`} target="_blank" rel="noopener noreferrer">Change something on WhatsApp</a></p>
+          <p className="note">You pay now to confirm your booking. Free to cancel up to 24 hours before, with a full refund. <a className="wa-link" href={`${WHATSAPP_URL}?text=${encodeURIComponent('Hi, I’d like to change the booking you sent me.')}`} target="_blank" rel="noopener noreferrer">Change something on WhatsApp</a></p>
 
           <div className="paybar">
             <div className="paybar__in">
-              <span className="paybar__t"><b>{money(total)}</b><span>{discAmount > 0 ? `${s.disc.code} applied` : 'Pay after the clean'}</span></span>
+              <span className="paybar__t"><b>{money(total)}</b><span>{discAmount > 0 ? `${s.disc.code} applied` : 'Pay now to book'}</span></span>
               <button type="button" className={`paybar__btn${ready ? '' : ' paybar__btn--wait'}`} disabled={!!busy} onClick={tapBook}>{busy || 'Book'}</button>
             </div>
           </div>
